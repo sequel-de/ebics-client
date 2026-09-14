@@ -69,7 +69,9 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.strictEqual(doc.documentElement.tagName, 'ebicsUnsecuredRequest');
 		assert.strictEqual(doc.documentElement.getAttribute('xmlns'), 'urn:org:ebics:H005');
 		assert.strictEqual(doc.documentElement.getAttribute('Version'), 'H005');
-		assert.include(xml, '<OrderType>INI</OrderType>');
+		assert.include(xml, '<AdminOrderType>INI</AdminOrderType>');
+		assert.notInclude(xml, '<OrderType>');
+		assert.notInclude(xml, '<OrderAttribute>');
 	});
 
 	it('serializes and signs an HIA request as ebicsUnsecuredRequest', async () => {
@@ -77,7 +79,7 @@ describe('H005 (EBICS 3.0) key management', () => {
 		const doc = new DOMParser().parseFromString(xml, 'text/xml');
 
 		assert.strictEqual(doc.documentElement.tagName, 'ebicsUnsecuredRequest');
-		assert.include(xml, '<OrderType>HIA</OrderType>');
+		assert.include(xml, '<AdminOrderType>HIA</AdminOrderType>');
 	});
 
 	it('serializes and signs an HPB request as ebicsNoPubKeyDigestsRequest, with a populated XML-DSIG signature', async () => {
@@ -91,25 +93,21 @@ describe('H005 (EBICS 3.0) key management', () => {
 
 	it('parses a bank HPB response into certificate-backed bank keys, and computes the H005 bank-key digest correctly', async () => {
 		// Simulate a bank's HPBResponseOrderData: two certificates (X002/E002),
-		// in the same PubKeyValue/X509Data shape our own HIA serializer
-		// produces (per the EBICS Common Implementation Guide, sec. 2.4.1.2:
-		// HIARequestOrderData and HBPResponseOrderData share the same
-		// RSAKeyValue/X509Data element types).
+		// in the ds:X509Data shape our own HIA serializer produces. Confirmed
+		// against the real ebics_types_H005.xsd: AuthenticationPubKeyInfoType/
+		// EncryptionPubKeyInfoType extend PubKeyInfoType ({ ds:X509Data })
+		// directly - unlike H004, there is no 'PubKeyValue' wrapper element.
 		const bankX002 = Key.generateWithCertificate('authentication', { commonName: 'HOST1' });
 		const bankE002 = Key.generateWithCertificate('encryption', { commonName: 'HOST1' });
 
 		const orderDataXml = `<?xml version="1.0" encoding="UTF-8"?>
 <HPBResponseOrderData xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns="urn:org:ebics:H005">
   <AuthenticationPubKeyInfo>
-    <PubKeyValue>
-      <ds:X509Data><ds:X509Certificate>${bankX002.certificateDer().toString('base64')}</ds:X509Certificate></ds:X509Data>
-    </PubKeyValue>
+    <ds:X509Data><ds:X509Certificate>${bankX002.certificateDer().toString('base64')}</ds:X509Certificate></ds:X509Data>
     <AuthenticationVersion>X002</AuthenticationVersion>
   </AuthenticationPubKeyInfo>
   <EncryptionPubKeyInfo>
-    <PubKeyValue>
-      <ds:X509Data><ds:X509Certificate>${bankE002.certificateDer().toString('base64')}</ds:X509Certificate></ds:X509Data>
-    </PubKeyValue>
+    <ds:X509Data><ds:X509Certificate>${bankE002.certificateDer().toString('base64')}</ds:X509Certificate></ds:X509Data>
     <EncryptionVersion>E002</EncryptionVersion>
   </EncryptionPubKeyInfo>
   <PartnerID>PARTNER1</PartnerID>
