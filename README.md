@@ -4,28 +4,36 @@
 <h1 align="center">node-ebics-client</h1>
 
 <p align="center">
-<a href="https://github.com/node-ebics/node-ebics-client/actions/workflows/CI.yml" title="Build Status"><img src="https://github.com/node-ebics/node-ebics-client/actions/workflows/CI.yml/badge.svg" alt="Build Status" /></a>
-<a href="https://www.npmjs.com/package/ebics-client" title="Build Status">
-<img alt="ebics-client" src="https://img.shields.io/npm/v/ebics-client">
+<a href="https://github.com/sequel-de/ebics-client/actions/workflows/CI.yml" title="Build Status"><img src="https://github.com/sequel-de/ebics-client/actions/workflows/CI.yml/badge.svg" alt="Build Status" /></a>
+<a href="https://www.npmjs.com/package/@sequel-de/ebics-client" title="npm version">
+<img alt="@sequel-de/ebics-client" src="https://img.shields.io/npm/v/%40sequel-de%2Febics-client">
 </a>
-<a href="https://snyk.io/test/github/ecollect/node-ebics-client" title="Known Vulnerabilities">
-<img src="https://snyk.io/test/github/ecollect/node-ebics-client/badge.svg" alt="Known Vulnerabilities">
-</a>
-<a href="/eCollect/node-ebics-client/blob/master/LICENSE" title="GPL-3.0"><img alt="GPL-3.0" src="https://img.shields.io/github/license/eCollect/node-ebics-client"></a>
-<a href='https://coveralls.io/github/eCollect/node-ebics-client?branch=master' title="Coverage Status"><img src='https://coveralls.io/repos/github/eCollect/node-ebics-client/badge.svg?branch=master' alt='Coverage Status' /></a>
+<a href="LICENSE" title="MIT"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
+
+> This is a fork of [node-ebics/node-ebics-client](https://github.com/node-ebics/node-ebics-client) (originally published as [`ebics-client`](https://www.npmjs.com/package/ebics-client)), published separately as [`@sequel-de/ebics-client`](https://www.npmjs.com/package/@sequel-de/ebics-client) to add EBICS 3.0 (H005) support. All credit for the original EBICS 2.5 (H004) implementation belongs to the upstream authors (see `contributors` in [package.json](package.json) and the project's git history).
 
 Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
 The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation, for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**.
 
+## Install
+
+```sh
+npm install @sequel-de/ebics-client
+```
+
+```js
+const { Client, Orders, fsKeysStorage } = require('@sequel-de/ebics-client');
+```
+
 ## Usage
 
-For examples on how to use this library, take a look at the [examples](https://github.com/node-ebics/node-ebics-client/tree/master/examples).
+For examples on how to use this library, take a look at the [examples](https://github.com/sequel-de/ebics-client/tree/master/examples).
 
 ### Initialization
 
-1. Create a configuration (see [example configs](https://github.com/node-ebics/node-ebics-client/tree/master/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
+1. Create a configuration (see [example configs](https://github.com/sequel-de/ebics-client/tree/master/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
 
     - The fields `url`, `partnerId`, `userId`, `hostId` are provided by your bank.
     - The `passphrase` is used to encrypt the keys file, which will be stored at the `storageLocation`.

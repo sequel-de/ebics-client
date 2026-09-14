@@ -1,14 +1,15 @@
 {
-	"name": "ebics-client",
-	"version": "5.0.0",
-	"description": "Node.js ISO 20022 Compliant EBICS Client",
+	"name": "@sequel-de/ebics-client",
+	"version": "5.1.0",
+	"description": "Node.js ISO 20022 Compliant EBICS Client (EBICS 2.5/H004 and EBICS 3.0/H005)",
 	"main": "index.js",
 	"engines": {
 		"node": ">=20"
 	},
 	"files": [
 		"lib/**/*",
-		"templates/**/*"
+		"templates/**/*",
+		"docs/**/*"
 	],
 	"scripts": {
 		"lint": "eslint .",
@@ -16,12 +17,22 @@
 		"coverage": "nyc report --reporter=lcov",
 		"version": "auto-changelog -p -t changelog-template.hbs && git add CHANGELOG.md"
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/node-ebics/node-ebics-client"
+		"url": "https://github.com/sequel-de/ebics-client"
+	},
+	"homepage": "https://github.com/sequel-de/ebics-client#readme",
+	"bugs": {
+		"url": "https://github.com/sequel-de/ebics-client/issues"
 	},
 	"keywords": [
 		"EBICS",
+		"EBICS3",
+		"H004",
+		"H005",
 		"ISO20022",
 		"nodejs",
 		"api",

@@ -1,5 +1,17 @@
 ### Changelog
 
+#### [v5.1.0]
+
+- feat: add EBICS 3.0 (H005) key management support - INI, HIA, HPB, using X.509-certificate-wrapped keys as H005 requires [`54f9112`](https://github.com/sequel-de/ebics-client/commit/54f9112) [`99c9e33`](https://github.com/sequel-de/ebics-client/commit/99c9e33836186cd5fa13f763b5d820a20d3ac1af)
+- fix: H005 key-management XML structure - `ds:X509Data` is a direct child of `*PubKeyInfo`, not nested in a `PubKeyValue` wrapper [`4be7374`](https://github.com/sequel-de/ebics-client/commit/4be7374)
+- fix: H005 `OrderDetails` uses `AdminOrderType` only - no `OrderType`/`OrderAttribute` as in H004 [`c538c8f`](https://github.com/sequel-de/ebics-client/commit/c538c8f)
+- fix: H005 trace-storage order-type labels [`ebc79c6`](https://github.com/sequel-de/ebics-client/commit/ebc79c6)
+- test: bundle the real EBICS 3.0 (H005) XSD schema family and validate the H005 test suite against it, matching H004's existing schema-validation rigor [`b512a89`](https://github.com/sequel-de/ebics-client/commit/b512a89)
+- docs: document H005 support (README, `docs/EBICS-3.0-H005.md`, `examples/initialize-h005.js`, `examples/save-bank-keys-h005.js`) [`c5524b1`](https://github.com/sequel-de/ebics-client/commit/c5524b134b9155f4b2e0c26f22ba98862cc13140)
+- chore: publish as `@sequel-de/ebics-client`
+
+This implementation has been validated both against the real EBICS 3.0 schema and live against PostFinance's EBICS 3.0 ISO test environment - INI, HIA and HPB all returned `EBICS_OK`. EBICS 3.0 business order upload/download (BTU/BTD) is not yet implemented - see `docs/EBICS-3.0-H005.md`.
+
 #### [v4.2.0]
 
 - feat: update dependencies [`a03ec22`](https://github.com/node-ebics/node-ebics-client/commit/a03ec2283fdd3dcf750c5ed448f0195d92c5c9f0)
