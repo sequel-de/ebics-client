@@ -17,7 +17,7 @@
 
 Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
-The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation.
+The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation, for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**.
 
 ## Usage
 
@@ -41,6 +41,28 @@ For examples on how to use this library, take a look at the [examples](https://g
 
 If all these steps were executed successfully, you can now do all things EBICS, like fetching bank statements by running `node examples/send-sta-order.js <environment> <bank> [entity]`, or actually use this library in your custom banking applications.
 
+### EBICS 3.0 (H005)
+
+EBICS 3.0's key-management orders (INI, HIA, HPB) are supported alongside
+H004, using X.509-certificate-wrapped keys as H005 requires. Use
+`Orders.H005.INI` / `.HIA` / `.HPB` instead of the flat `Orders.*`, and see
+[`examples/initialize-h005.js`](examples/initialize-h005.js) /
+[`examples/save-bank-keys-h005.js`](examples/save-bank-keys-h005.js). H005
+business order upload/download (BTU/BTD) is not yet implemented. Full
+details, a code example, and the H004/H005 structural differences: see
+[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
+
+## Testing
+
+```sh
+npm test    # runs the full suite, including schema validation against the
+            # real, bundled EBICS XSDs (test/xsd) for both H004 and H005
+npm run lint
+```
+
+See [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md#testing) for what the
+H005 schema validation specifically covers.
+
 ## Supported Banks
 
 The client is currently tested and verified to work with the following banks:
@@ -52,6 +74,7 @@ The client is currently tested and verified to work with the following banks:
 -   [Bank GPB International S.A.](https://gazprombank.lu/e-banking)
 -   [Bank GPB AO](https://gazprombank.ru/)
 -   [J.P. Morgan](https://www.jpmorgan.com/)
+-   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB), validated against their ISO test environment
 
 ## Inspiration
 
