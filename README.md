@@ -4,7 +4,7 @@
 <h1 align="center">node-ebics-client</h1>
 
 <p align="center">
-<a href="https://travis-ci.org/node-ebics/node-ebics-client" title="Build Status"><img src="https://travis-ci.org/node-ebics/node-ebics-client.svg?branch=master" alt="Build Status" /></a>
+<a href="https://github.com/node-ebics/node-ebics-client/actions/workflows/CI.yml" title="Build Status"><img src="https://github.com/node-ebics/node-ebics-client/actions/workflows/CI.yml/badge.svg" alt="Build Status" /></a>
 <a href="https://www.npmjs.com/package/ebics-client" title="Build Status">
 <img alt="ebics-client" src="https://img.shields.io/npm/v/ebics-client">
 </a>
@@ -15,19 +15,13 @@
 <a href='https://coveralls.io/github/eCollect/node-ebics-client?branch=master' title="Coverage Status"><img src='https://coveralls.io/repos/github/eCollect/node-ebics-client/badge.svg?branch=master' alt='Coverage Status' /></a>
 </p>
 
-Pure Node.js (>= 16) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication).
+Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
 The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation.
 
 ## Usage
 
 For examples on how to use this library, take a look at the [examples](https://github.com/node-ebics/node-ebics-client/tree/master/examples).
-
-### A note on recent Node.js versions
-
-The latest Node.js versions don't support `RSA_PKCS1_PADDING` for private decryption for security reasons, throwing an error like _TypeError: RSA_PKCS1_PADDING is no longer supported for private decryption, this can be reverted with --security-revert=CVE-2023-46809_.
-
-EBICS requires this mode, so in order for this library to work, add the following parameter when starting Node.js: `--security-revert=CVE-2023-46809`
 
 ### Initialization
 

@@ -1,8 +1,0 @@
-language: node_js
-node_js:
-  - "16" # maintance lts
-  - "17"
-  - "18" # active lts
-  - "19"
-  - "20" # current
-after_success: npm run coverage

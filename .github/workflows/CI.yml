@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [ 18, 20, 22 ]
+        node: [ 20, 22, 24 ]
     name: Node.js ${{ matrix.node }}
     steps:
       - uses: actions/checkout@v4
@@ -21,3 +21,11 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci
       - run: npm test
+      - name: Report coverage
+        if: matrix.node == 22
+        run: npm run coverage
+      - name: Upload coverage to Coveralls
+        if: matrix.node == 22
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage/lcov.info
