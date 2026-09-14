@@ -17,14 +17,39 @@ const Crypto = require('../../lib/crypto/Crypto');
 const H005Response = require('../../lib/orders/H005/response');
 const serializerMiddleware = require('../../lib/middleware/serializer');
 
-// NOTE ON TEST COVERAGE: unlike test/spec/H004.js, this suite can't validate
-// generated XML against a real ebics_*_H005.xsd - no H005 schema is bundled
-// under test/xsd (only H004's). The assertions below are therefore
-// structural (namespace, root element, expected fields present, values
-// round-trip correctly) rather than full schema validation. See
-// node-ebics-client-h005-scoping.md for what would close that gap, and
-// treat this suite as a floor, not a substitute for validating against a
-// real EBICS 3.0 schema or bank test environment before production use.
+const xmlLintWasm = require('xmllint-wasm');
+
+// Validates a generated request against the real, bundled EBICS 3.0 (H005)
+// schema family (test/xsd/ebics_H005.xsd and its includes - see
+// test/xsd/README.md for provenance). This is the same rigor
+// test/spec/H004.js applies to H004 requests, and closes the gap an earlier
+// version of this suite had (structural-only assertions): every INI/HIA/HPB
+// request below is now schema-valid, not just shaped-like-it-should-be. This
+// implementation has additionally been validated live against PostFinance's
+// EBICS 3.0 ISO test environment (INI, HIA and HPB all returned EBICS_OK).
+const validateXML = (() => {
+	const xsdDir = path.resolve(__dirname, '../xsd');
+	const rootFile = 'ebics_H005.xsd';
+	const schemaDoc = fs.readFileSync(path.join(xsdDir, rootFile), 'utf8');
+	const preload = fs
+		.readdirSync(xsdDir)
+		.filter(file => file.endsWith('.xsd') && file !== rootFile)
+		.map(file => ({
+			fileName: file,
+			contents: fs.readFileSync(path.join(xsdDir, file), {
+				encoding: 'utf8',
+			}),
+		}));
+
+	return async (str) => {
+		const results = await xmlLintWasm.validateXML({
+			xml: [{ fileName: 'ebics.xml', contents: str }],
+			schema: [{ fileName: rootFile, contents: schemaDoc }],
+			preload,
+		});
+		return results.valid;
+	};
+})();
 
 describe('H005 (EBICS 3.0) key management', () => {
 	const keyPath = path.join(os.tmpdir(), `h005-test-keys-${process.pid}-${Date.now()}.key`);
@@ -72,6 +97,7 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.include(xml, '<AdminOrderType>INI</AdminOrderType>');
 		assert.notInclude(xml, '<OrderType>');
 		assert.notInclude(xml, '<OrderAttribute>');
+		assert.isTrue(await validateXML(xml));
 	});
 
 	it('serializes and signs an HIA request as ebicsUnsecuredRequest', async () => {
@@ -80,6 +106,7 @@ describe('H005 (EBICS 3.0) key management', () => {
 
 		assert.strictEqual(doc.documentElement.tagName, 'ebicsUnsecuredRequest');
 		assert.include(xml, '<AdminOrderType>HIA</AdminOrderType>');
+		assert.isTrue(await validateXML(xml));
 	});
 
 	it('serializes and signs an HPB request as ebicsNoPubKeyDigestsRequest, with a populated XML-DSIG signature', async () => {
@@ -89,6 +116,7 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.strictEqual(doc.documentElement.tagName, 'ebicsNoPubKeyDigestsRequest');
 		assert.match(xml, /<ds:DigestValue>[^<]+<\/ds:DigestValue>/);
 		assert.match(xml, /<ds:SignatureValue>[^<]+<\/ds:SignatureValue>/);
+		assert.isTrue(await validateXML(xml));
 	});
 
 	it('parses a bank HPB response into certificate-backed bank keys, and computes the H005 bank-key digest correctly', async () => {
@@ -100,6 +128,11 @@ describe('H005 (EBICS 3.0) key management', () => {
 		const bankX002 = Key.generateWithCertificate('authentication', { commonName: 'HOST1' });
 		const bankE002 = Key.generateWithCertificate('encryption', { commonName: 'HOST1' });
 
+		// Field order/shape confirmed against the real HPBResponseOrderDataType
+		// (ebics_orders_H005.xsd): AuthenticationPubKeyInfo,
+		// EncryptionPubKeyInfo, then HostID - NOT PartnerID/UserID (that's the
+		// H004 shape). SignaturePubKeyInfo is declared but minOccurs=0
+		// maxOccurs=0, i.e. never actually present.
 		const orderDataXml = `<?xml version="1.0" encoding="UTF-8"?>
 <HPBResponseOrderData xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns="urn:org:ebics:H005">
   <AuthenticationPubKeyInfo>
@@ -110,9 +143,13 @@ describe('H005 (EBICS 3.0) key management', () => {
     <ds:X509Data><ds:X509Certificate>${bankE002.certificateDer().toString('base64')}</ds:X509Certificate></ds:X509Data>
     <EncryptionVersion>E002</EncryptionVersion>
   </EncryptionPubKeyInfo>
-  <PartnerID>PARTNER1</PartnerID>
-  <UserID>USER1</UserID>
+  <HostID>HOST1</HostID>
 </HPBResponseOrderData>`;
+
+		// The fixture itself should be schema-valid - HPBResponseOrderData is
+		// defined in ebics_orders_H005.xsd, included by the same umbrella
+		// schema (ebics_H005.xsd) used above.
+		assert.isTrue(await validateXML(orderDataXml));
 
 		const fakeResponse = H005Response('<a/>', keys);
 		fakeResponse.orderData = () => orderDataXml;
