@@ -19,5 +19,16 @@ npm-debug.log
 /.vscode
 *.pid
 
+# JetBrains IDEs (IntelliJ/WebStorm/etc.)
+.idea/
+*.iml
+
 # Tests temporary
 .test_tmp
+
+# Local-only scratch/credential material - files named *.local.* are never
+# meant to be committed (e.g. a *.local.key EBICS key file, or a
+# *.local.xml dump of a signed request used while debugging against a real
+# bank). Anyone extending this library's live-bank testing should keep
+# using this naming convention rather than inventing a new one.
+*.local.*
