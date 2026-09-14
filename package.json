@@ -18,6 +18,7 @@
 		"version": "auto-changelog -p -t changelog-template.hbs && git add CHANGELOG.md"
 	},
 	"publishConfig": {
+		"registry": "https://npm.pkg.github.com",
 		"access": "public"
 	},
 	"repository": {

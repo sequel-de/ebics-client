@@ -3,8 +3,13 @@ name: Bump version and publish
 # One-click release: Actions -> Bump version and publish -> Run workflow,
 # pick patch/minor/major. Runs tests/lint, bumps package.json (and
 # regenerates CHANGELOG.md via the existing "version" npm script hook),
-# commits + tags, pushes both, publishes to npm, then creates a matching
-# GitHub Release.
+# commits + tags, pushes both, publishes to GitHub Packages, then creates
+# a matching GitHub Release.
+#
+# Publishes to GitHub Packages (npm.pkg.github.com), not the public npm
+# registry - this repo's package.json publishConfig points there, and
+# auth uses the built-in GITHUB_TOKEN (no separate secret needed, unlike
+# a real npm-registry publish which would need an NPM_TOKEN).
 #
 # This does the publish itself rather than relying on the separate
 # publish.yml's `release: published` trigger to fire automatically: a
@@ -34,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write # for npm provenance
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +48,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: 'https://npm.pkg.github.com'
       - run: npm ci
       - run: npm test
       - run: npm run lint
@@ -58,10 +63,10 @@ jobs:
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
       - name: Push commit and tag
         run: git push --follow-tags
-      - name: Publish to npm
-        run: npm publish --access public --provenance
+      - name: Publish to GitHub Packages
+        run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

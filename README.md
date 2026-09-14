@@ -5,13 +5,11 @@
 
 <p align="center">
 <a href="https://github.com/sequel-de/ebics-client/actions/workflows/CI.yml" title="Build Status"><img src="https://github.com/sequel-de/ebics-client/actions/workflows/CI.yml/badge.svg" alt="Build Status" /></a>
-<a href="https://www.npmjs.com/package/@sequel-de/ebics-client" title="npm version">
-<img alt="@sequel-de/ebics-client" src="https://img.shields.io/npm/v/%40sequel-de%2Febics-client">
-</a>
+<a href="https://github.com/sequel-de/ebics-client/pkgs/npm/ebics-client" title="GitHub Packages"><img alt="GitHub Packages" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsequel-de%2Febics-client%2Fmain%2Fpackage.json&query=%24.version&label=GitHub%20Packages&color=blue"></a>
 <a href="LICENSE" title="MIT"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
-> This is a fork of [node-ebics/node-ebics-client](https://github.com/node-ebics/node-ebics-client) (originally published as [`ebics-client`](https://www.npmjs.com/package/ebics-client)), published separately as [`@sequel-de/ebics-client`](https://www.npmjs.com/package/@sequel-de/ebics-client) to add EBICS 3.0 (H005) support. All credit for the original EBICS 2.5 (H004) implementation belongs to the upstream authors (see `contributors` in [package.json](package.json) and the project's git history).
+> This is a fork of [node-ebics/node-ebics-client](https://github.com/node-ebics/node-ebics-client) (originally published as [`ebics-client`](https://www.npmjs.com/package/ebics-client) on the public npm registry), published separately as [`@sequel-de/ebics-client`](https://github.com/sequel-de/ebics-client/pkgs/npm/ebics-client) on **GitHub Packages** (not the public npm registry) to add EBICS 3.0 (H005) support. All credit for the original EBICS 2.5 (H004) implementation belongs to the upstream authors (see `contributors` in [package.json](package.json) and the project's git history).
 
 Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
@@ -19,9 +17,23 @@ The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, 
 
 ## Install
 
-```sh
-npm install @sequel-de/ebics-client
-```
+This package is published to **[GitHub Packages](https://github.com/sequel-de/ebics-client/pkgs/npm/ebics-client)**, not the public npm registry. GitHub Packages requires authentication to install even public packages - a plain `npm install` without the setup below will fail with a 404/401.
+
+1. Create a GitHub [personal access token](https://github.com/settings/tokens) with the `read:packages` scope.
+2. Add these two lines to your project's `.npmrc` (or `~/.npmrc` for a global setting):
+
+   ```ini
+   @sequel-de:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+   ```
+
+   (Use an environment variable rather than a literal token if this file is committed: `_authToken=${GITHUB_TOKEN}`.)
+
+3. Install as usual:
+
+   ```sh
+   npm install @sequel-de/ebics-client
+   ```
 
 ```js
 const { Client, Orders, fsKeysStorage } = require('@sequel-de/ebics-client');
@@ -78,25 +90,23 @@ CI (`.github/workflows/CI.yml`) runs the test suite and lint across Node
 tarball actually builds (`npm pack`) and uploads it as a build artifact -
 so a packaging regression shows up before you ever try to publish.
 
-One-time setup: create an [npm automation token](https://docs.npmjs.com/creating-and-viewing-access-tokens)
-with publish rights on the `sequel-de` org, then add it as a repository
-secret named `NPM_TOKEN` (*Settings → Secrets and variables → Actions →
-New repository secret*) - without this, publishing will fail with an
-auth error.
+No one-time secret setup is needed: publishing goes to **GitHub Packages**
+(`npm.pkg.github.com`), which authenticates with the built-in
+`GITHUB_TOKEN` that every workflow run already has - there's no separate
+token to create or store.
 
 **To cut a release**: *Actions → Bump version and publish → Run
 workflow*, pick `patch` / `minor` / `major`. That one click runs
 tests/lint, bumps `package.json`, regenerates `CHANGELOG.md`, commits and
-tags it, pushes, publishes to npm with
-[provenance](https://docs.npmjs.com/generating-provenance-statements),
-and creates the matching GitHub Release - no local git commands needed.
+tags it, pushes, publishes to GitHub Packages, and creates the matching
+GitHub Release - no local git commands needed.
 
 `.github/workflows/publish.yml` still exists separately as a manual
 fallback (e.g. to retry a publish for a tag that already exists) -
 triggered by publishing a GitHub Release by hand through the GitHub UI,
-or via *Actions → Publish to npm → Run workflow*. It won't fire
-automatically off a release the bump workflow itself creates (GitHub
-doesn't chain workflow runs off events produced by the default
+or via *Actions → Publish to GitHub Packages → Run workflow*. It won't
+fire automatically off a release the bump workflow itself creates
+(GitHub doesn't chain workflow runs off events produced by the default
 `GITHUB_TOKEN`, to prevent accidental infinite loops), which is exactly
 why the bump workflow publishes itself rather than relying on it.
 
