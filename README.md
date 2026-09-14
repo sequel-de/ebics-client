@@ -78,23 +78,27 @@ CI (`.github/workflows/CI.yml`) runs the test suite and lint across Node
 tarball actually builds (`npm pack`) and uploads it as a build artifact -
 so a packaging regression shows up before you ever try to publish.
 
-Publishing itself (`.github/workflows/publish.yml`) is separate and only
-runs when you deliberately ask for it, either by publishing a GitHub
-Release or via *Actions → Publish to npm → Run workflow*. One-time setup:
-create an [npm automation token](https://docs.npmjs.com/creating-and-viewing-access-tokens)
+One-time setup: create an [npm automation token](https://docs.npmjs.com/creating-and-viewing-access-tokens)
 with publish rights on the `sequel-de` org, then add it as a repository
 secret named `NPM_TOKEN` (*Settings → Secrets and variables → Actions →
-New repository secret*) - without this, the publish job will fail at the
-`npm publish` step.
+New repository secret*) - without this, publishing will fail with an
+auth error.
 
-To cut a release:
+**To cut a release**: *Actions → Bump version and publish → Run
+workflow*, pick `patch` / `minor` / `major`. That one click runs
+tests/lint, bumps `package.json`, regenerates `CHANGELOG.md`, commits and
+tags it, pushes, publishes to npm with
+[provenance](https://docs.npmjs.com/generating-provenance-statements),
+and creates the matching GitHub Release - no local git commands needed.
 
-1. Bump `version` in `package.json` (and add a `CHANGELOG.md` entry).
-2. Commit, tag it to match (`git tag v5.1.1 && git push --tags`), and push.
-3. Create a GitHub Release from that tag - this triggers the publish
-   workflow, which re-runs tests/lint, checks the tag matches
-   `package.json`'s version, and publishes to npm with
-   [provenance](https://docs.npmjs.com/generating-provenance-statements).
+`.github/workflows/publish.yml` still exists separately as a manual
+fallback (e.g. to retry a publish for a tag that already exists) -
+triggered by publishing a GitHub Release by hand through the GitHub UI,
+or via *Actions → Publish to npm → Run workflow*. It won't fire
+automatically off a release the bump workflow itself creates (GitHub
+doesn't chain workflow runs off events produced by the default
+`GITHUB_TOKEN`, to prevent accidental infinite loops), which is exactly
+why the bump workflow publishes itself rather than relying on it.
 
 ## Supported Banks
 

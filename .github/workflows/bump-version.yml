@@ -1,0 +1,68 @@
+name: Bump version and publish
+
+# One-click release: Actions -> Bump version and publish -> Run workflow,
+# pick patch/minor/major. Runs tests/lint, bumps package.json (and
+# regenerates CHANGELOG.md via the existing "version" npm script hook),
+# commits + tags, pushes both, publishes to npm, then creates a matching
+# GitHub Release.
+#
+# This does the publish itself rather than relying on the separate
+# publish.yml's `release: published` trigger to fire automatically: a
+# release created here using the default GITHUB_TOKEN would NOT actually
+# trigger that workflow (GitHub doesn't chain workflow runs off events
+# produced by the default token, to prevent accidental infinite loops) -
+# so publish.yml stays as a manual/standalone fallback (e.g. a human
+# publishing a release by hand through the GitHub UI, or re-running a
+# publish for a tag that already exists) rather than something this
+# workflow depends on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+jobs:
+  bump-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history - auto-changelog needs it
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Bump version, update CHANGELOG, commit and tag
+        id: bump
+        run: |
+          NEW_TAG=$(npm version "${{ github.event.inputs.bump }}" -m "chore: release %s")
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+      - name: Push commit and tag
+        run: git push --follow-tags
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ steps.bump.outputs.tag }}" --title "${{ steps.bump.outputs.tag }}" --generate-notes
