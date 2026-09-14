@@ -105,7 +105,10 @@ describe('H004 order generation', () => {
 	// eslint-disable-next-line no-restricted-syntax
 	for (const [name, orderDefinition] of Object.entries(Orders)) {
 		const order = getOrderObject(name, orderDefinition);
-		if (!order) continue;
+		// Skip namespaced groups of orders for other EBICS versions (e.g.
+		// Orders.H005 is { INI, HIA, HPB }, not an order definition itself) -
+		// this suite specifically validates the flat H004 order set.
+		if (!order || !order.orderDetails) continue;
 
 		const type = order.orderDetails.OrderType;
 		const { operation } = order;
