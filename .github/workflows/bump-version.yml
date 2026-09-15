@@ -1,10 +1,16 @@
 name: Bump version and publish
 
-# One-click release: Actions -> Bump version and publish -> Run workflow,
-# pick patch/minor/major. Runs tests/lint, bumps package.json (and
-# regenerates CHANGELOG.md via the existing "version" npm script hook),
-# commits + tags, pushes both, publishes to GitHub Packages, then creates
-# a matching GitHub Release.
+# Releases automatically: every push to main (i.e. every merged PR) runs
+# this, bumps package.json with a patch version (via the existing "version"
+# npm script hook, which also regenerates CHANGELOG.md), commits + tags,
+# pushes both, publishes to GitHub Packages, then creates a matching GitHub
+# Release. No manual step needed for the common case.
+#
+# Every merge still ships as a patch release automatically - there's no
+# way to intercept that push before it publishes. To also mark something
+# as a minor or major release, trigger this workflow by hand afterwards -
+# Actions -> Bump version and publish -> Run workflow, pick the bump type
+# - which bumps again from whatever's currently published.
 #
 # Publishes to GitHub Packages (npm.pkg.github.com), not the public npm
 # registry - this repo's package.json publishConfig points there, and
@@ -19,9 +25,13 @@ name: Bump version and publish
 # so publish.yml stays as a manual/standalone fallback (e.g. a human
 # publishing a release by hand through the GitHub UI, or re-running a
 # publish for a tag that already exists) rather than something this
-# workflow depends on.
+# workflow depends on. That same anti-recursion behaviour is also what
+# stops this workflow's own release commit (pushed with the default
+# GITHUB_TOKEN) from re-triggering itself in a loop.
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       bump:
@@ -59,7 +69,8 @@ jobs:
       - name: Bump version, update CHANGELOG, commit and tag
         id: bump
         run: |
-          NEW_TAG=$(npm version "${{ github.event.inputs.bump }}" -m "chore: release %s")
+          BUMP_TYPE="${{ github.event.inputs.bump || 'patch' }}"
+          NEW_TAG=$(npm version "$BUMP_TYPE" -m "chore: release %s")
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
       - name: Push commit and tag
         run: git push --follow-tags

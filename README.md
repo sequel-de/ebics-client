@@ -105,11 +105,19 @@ No one-time secret setup is needed: publishing goes to **GitHub Packages**
 `GITHUB_TOKEN` that every workflow run already has - there's no separate
 token to create or store.
 
-**To cut a release**: *Actions → Bump version and publish → Run
-workflow*, pick `patch` / `minor` / `major`. That one click runs
-tests/lint, bumps `package.json`, regenerates `CHANGELOG.md`, commits and
-tags it, pushes, publishes to GitHub Packages, and creates the matching
-GitHub Release - no local git commands needed.
+**Releases happen automatically**: every push to `main` (i.e. every merged
+PR) runs `.github/workflows/bump-version.yml`, which bumps `package.json`
+with a `patch` version, regenerates `CHANGELOG.md`, commits and tags it,
+pushes, publishes to GitHub Packages, and creates the matching GitHub
+Release - no manual step for the common case.
+
+Every merge to `main` ships as a `patch` release automatically - there's
+no way to intercept that push before it publishes. **To also mark
+something as a `minor` or `major` release**, trigger the same workflow by
+hand afterwards: *Actions → Bump version and publish → Run workflow*, pick
+the bump type. It bumps from whatever's currently published, so this adds
+an explicit `minor`/`major` bump on top of the `patch` release the merge
+itself already shipped.
 
 `.github/workflows/publish.yml` still exists separately as a manual
 fallback (e.g. to retry a publish for a tag that already exists) -
