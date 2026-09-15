@@ -11,10 +11,21 @@
 // Usage: node examples/download-statement-h005.js <environment> <bank> [entity] [startDate] [endDate]
 
 const { Orders, utils } = require('../index');
+const loadConfig = require('./loadConfig');
+const getClient = require('./getClient');
 
-const client = require('./getClient')();
+// getClient()/loadConfig() read process.argv[4] as `entity` unconditionally,
+// which would silently shift startDate/endDate by one slot whenever entity
+// is omitted (an entirely valid usage per the [entity] above). Detect that
+// case by checking whether the argument in the entity slot actually looks
+// like a date, and shift our own parsing accordingly.
+const isDateArg = arg => /^\d{4}-\d{2}-\d{2}$/.test(arg || '');
+const [, , env, bank, arg4, arg5, arg6] = process.argv;
+const hasEntity = Boolean(arg4) && !isDateArg(arg4);
+const entity = hasEntity ? arg4 : '';
+const [startDate = null, endDate = null] = hasEntity ? [arg5, arg6] : [arg4, arg5];
 
-const [, , , , , startDate = null, endDate = null] = process.argv;
+const client = getClient(loadConfig(undefined, env, bank, entity));
 
 client.send(Orders.H005.Z53(startDate, endDate))
 	.then((resp) => {
