@@ -5,11 +5,14 @@
 // EBICS 3.0 (H005) equivalent of send-sta-order.js / send-z53-order.js.
 //
 // Downloads camt.053 end-of-period account statements via a BTD (business
-// transaction download) order, using the Swiss market-practice BTF
-// parameters (ServiceName=EOP, Scope=CH, MsgName=camt.053 v08) - see
-// docs/EBICS-3.0-H005.md and lib/predefinedOrders/h005/Z53.js. Statement
-// downloads are delivered wrapped in a ZIP container per Swiss market
-// practice, so the response is unzipped before use.
+// transaction download) order. Orders.H005.Z53 defaults to the Swiss
+// market-practice BTF parameters (ServiceName=EOP, Scope=CH,
+// MsgName=camt.053 v08, ZIP container) - see docs/EBICS-3.0-H005.md and
+// lib/predefinedOrders/h005/Z53.js - but every one of those is overridable
+// for a different bank/market/message type, e.g.
+// Orders.H005.Z53(startDate, endDate, { scope: 'DE' }). The response is
+// unzipped here since a ZIP container was requested; pass
+// { container: false } and skip the unzip step if yours doesn't use one.
 //
 // Your own keys must already be registered (examples/initialize-h005.js)
 // and the bank's keys saved (examples/save-bank-keys-h005.js).

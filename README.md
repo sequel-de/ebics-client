@@ -70,10 +70,13 @@ statement download (`Orders.H005.Z53`, camt.053). Use `Orders.H005.INI` /
 [`examples/initialize-h005.js`](examples/initialize-h005.js) /
 [`examples/save-bank-keys-h005.js`](examples/save-bank-keys-h005.js) /
 [`examples/download-statement-h005.js`](examples/download-statement-h005.js).
-BTD's BTF parameters are sourced from published Swiss market practice, not
-yet validated live (unlike INI/HIA/HPB); business order upload (BTU) is not
-yet implemented. Full details, a code example, and the H004/H005 structural
-differences: see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
+BTD's BTF parameters (`ServiceName`/`Scope`/`MsgName`/`Container`) default
+to published Swiss market practice but are fully overridable for other
+banks/markets/message types, and are not yet validated live (unlike
+INI/HIA/HPB); business order upload (BTU) is not yet implemented. Full
+details, a code example (including overriding the BTF defaults, and how
+they differ by country), and the H004/H005 structural differences: see
+[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
 
 ## Testing
 
