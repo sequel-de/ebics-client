@@ -23,13 +23,7 @@ const serializerMiddleware = require('../../lib/middleware/serializer');
 const xmlLintWasm = require('xmllint-wasm');
 
 // Validates a generated request against the real, bundled EBICS 3.0 (H005)
-// schema family (test/xsd/ebics_H005.xsd and its includes - see
-// test/xsd/README.md for provenance). This is the same rigor
-// test/spec/H004.js applies to H004 requests, and closes the gap an earlier
-// version of this suite had (structural-only assertions): every INI/HIA/HPB
-// request below is now schema-valid, not just shaped-like-it-should-be. This
-// implementation has additionally been validated live against PostFinance's
-// EBICS 3.0 ISO test environment (INI, HIA and HPB all returned EBICS_OK).
+// schema family (test/xsd/ebics_H005.xsd and its includes).
 const validateXML = (() => {
 	const xsdDir = path.resolve(__dirname, '../xsd');
 	const rootFile = 'ebics_H005.xsd';
@@ -123,19 +117,9 @@ describe('H005 (EBICS 3.0) key management', () => {
 	});
 
 	it('parses a bank HPB response into certificate-backed bank keys, and computes the H005 bank-key digest correctly', async () => {
-		// Simulate a bank's HPBResponseOrderData: two certificates (X002/E002),
-		// in the ds:X509Data shape our own HIA serializer produces. Confirmed
-		// against the real ebics_types_H005.xsd: AuthenticationPubKeyInfoType/
-		// EncryptionPubKeyInfoType extend PubKeyInfoType ({ ds:X509Data })
-		// directly - unlike H004, there is no 'PubKeyValue' wrapper element.
 		const bankX002 = Key.generateWithCertificate('authentication', { commonName: 'HOST1' });
 		const bankE002 = Key.generateWithCertificate('encryption', { commonName: 'HOST1' });
 
-		// Field order/shape confirmed against the real HPBResponseOrderDataType
-		// (ebics_orders_H005.xsd): AuthenticationPubKeyInfo,
-		// EncryptionPubKeyInfo, then HostID - NOT PartnerID/UserID (that's the
-		// H004 shape). SignaturePubKeyInfo is declared but minOccurs=0
-		// maxOccurs=0, i.e. never actually present.
 		const orderDataXml = `<?xml version="1.0" encoding="UTF-8"?>
 <HPBResponseOrderData xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns="urn:org:ebics:H005">
   <AuthenticationPubKeyInfo>
@@ -149,9 +133,6 @@ describe('H005 (EBICS 3.0) key management', () => {
   <HostID>HOST1</HostID>
 </HPBResponseOrderData>`;
 
-		// The fixture itself should be schema-valid - HPBResponseOrderData is
-		// defined in ebics_orders_H005.xsd, included by the same umbrella
-		// schema (ebics_H005.xsd) used above.
 		assert.isTrue(await validateXML(orderDataXml));
 
 		const fakeResponse = H005Response('<a/>', keys);
@@ -167,12 +148,7 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.isTrue(keysWithBank.bankX().hasCertificate());
 		assert.isTrue(keysWithBank.bankE().hasCertificate());
 
-		// The H005 bank-key digest is SHA-256 over the raw certificate DER
-		// bytes (base64-encoded) - not H004's hash-of-modulus-and-exponent.
-		// Verified against the EBICS Common Implementation Guide's own worked
-		// example in an earlier standalone check; here we confirm it's wired
-		// correctly end to end (round-tripped cert -> same digest as computed
-		// directly from the original certificate DER).
+		// SHA-256 over the raw certificate DER bytes, base64-encoded.
 		const expectedDigest = crypto
 			.createHash('sha256')
 			.update(bankX002.certificateDer())
@@ -208,12 +184,7 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 
 		await client._generateKeys('h005'); // eslint-disable-line no-underscore-dangle
 
-		// Unlike INI/HIA/HPB (which establish the bank's keys in the first
-		// place, so can't assume them), an actual BTD request's header
-		// includes BankPubKeyDigests - it needs the bank's keys already on
-		// file. Simulate having already done HPB with a throwaway
-		// certificate-backed keypair, the same way the HPB response test
-		// above does.
+		// BTD's header needs the bank's keys already on file, unlike INI/HIA/HPB.
 		await client.setBankKeys({
 			bankX002: { cert: Key.generateWithCertificate('authentication', { commonName: 'HOST1' }).toCertPem() },
 			bankE002: { cert: Key.generateWithCertificate('encryption', { commonName: 'HOST1' }).toCertPem() },
@@ -233,12 +204,6 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.strictEqual(order.orderDetails.BTDOrderParams.Service.ServiceName, 'EOP');
 	});
 
-	// BTF codes (ServiceName=EOP, Scope=CH, MsgName=camt.053 v08, ZIP
-	// container) sourced from SIX Group's "EBICS 3.0 BTF-Codes CH" catalog
-	// and the Swiss Market Practice Guidelines for EBICS 3.0 - see
-	// lib/predefinedOrders/h005/Z53.js. Schema-valid here; not yet
-	// validated live against PostFinance (unlike this suite's INI/HIA/HPB
-	// coverage above).
 	it('serializes a BTD (camt.053 statement) download request as ebicsRequest, schema-valid against the real EBICS 3.0 schema', async () => {
 		const order = ebics.Orders.H005.Z53('2024-01-01', '2024-01-31');
 		const xml = await client.signOrder(order);
@@ -273,10 +238,6 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	// Every BTF field is overridable, not just scope/msgVersion - proven here
-	// with a different Swiss BTF row entirely: STM/CH/camt.052 v08 (intraday
-	// statement) instead of the default EOP/CH/camt.053 (end-of-period), per
-	// SIX Group's "EBICS 3.0 BTF-Codes CH" catalog.
 	it('accepts a full serviceName/scope/msgName/msgVersion override for an entirely different BTF row', async () => {
 		const order = ebics.Orders.H005.Z53(null, null, {
 			serviceName: 'STM', scope: 'CH', msgName: 'camt.052', msgVersion: '08',
@@ -300,12 +261,6 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	// Simulates a bank's BTD response (encrypted/deflated ZIP-wrapped order
-	// data, the same shape a real PostFinance response would have per Swiss
-	// market practice) end to end: response.js's orderData() decrypts and
-	// inflates it, then utils.unzip() extracts the camt.053 file inside -
-	// proving the two pieces (already-generic response parsing + the new
-	// unzip helper) actually work together, not just individually.
 	it('decrypts and unzips a simulated BTD response back to the original camt.053 content', async () => {
 		const keys = await client.keys();
 		const zip = new AdmZip();
