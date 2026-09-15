@@ -8,12 +8,15 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 const { DOMParser } = require('@xmldom/xmldom');
+const AdmZip = require('adm-zip');
 
 const ebics = require('../../');
 const Key = require('../../lib/keymanagers/Key');
 const Crypto = require('../../lib/crypto/Crypto');
+const utils = require('../../lib/utils');
 const H005Response = require('../../lib/orders/H005/response');
 const serializerMiddleware = require('../../lib/middleware/serializer');
 
@@ -179,12 +182,140 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.strictEqual(Crypto.digestCertificate(keysWithBank.bankX()), expectedDigest);
 	});
 
-	it('rejects business order operations (upload/download) until the BTF schema is confirmed', async () => {
+	it('rejects the upload (BTU) operation, which is not yet implemented', async () => {
 		try {
-			await serializerMiddleware.use({ version: 'h005', operation: 'download', orderDetails: {} }, client);
+			await serializerMiddleware.use({ version: 'h005', operation: 'upload', orderDetails: {} }, client);
 			assert.fail('expected serializer.use() to throw for an unimplemented H005 operation');
 		} catch (e) {
 			assert.match(e.message, /does not yet implement/);
 		}
+	});
+});
+
+describe('H005 (EBICS 3.0) BTD business order download', () => {
+	const keyPath = path.join(os.tmpdir(), `h005-btd-test-keys-${process.pid}-${Date.now()}.key`);
+	let client;
+
+	before(async () => {
+		client = new ebics.Client({
+			url: 'https://example-bank.test/ebicsweb',
+			partnerId: 'PARTNER1',
+			userId: 'USER1',
+			hostId: 'HOST1',
+			passphrase: 'test',
+			keyStorage: ebics.fsKeysStorage(keyPath),
+		});
+
+		await client._generateKeys('h005'); // eslint-disable-line no-underscore-dangle
+
+		// Unlike INI/HIA/HPB (which establish the bank's keys in the first
+		// place, so can't assume them), an actual BTD request's header
+		// includes BankPubKeyDigests - it needs the bank's keys already on
+		// file. Simulate having already done HPB with a throwaway
+		// certificate-backed keypair, the same way the HPB response test
+		// above does.
+		await client.setBankKeys({
+			bankX002: { cert: Key.generateWithCertificate('authentication', { commonName: 'HOST1' }).toCertPem() },
+			bankE002: { cert: Key.generateWithCertificate('encryption', { commonName: 'HOST1' }).toCertPem() },
+		});
+	});
+
+	after(() => {
+		if (fs.existsSync(keyPath)) fs.unlinkSync(keyPath);
+	});
+
+	it('Orders.H005.Z53 is an h005-versioned BTD download order definition', () => {
+		const order = ebics.Orders.H005.Z53();
+
+		assert.strictEqual(order.version, 'h005');
+		assert.strictEqual(order.operation, 'download');
+		assert.strictEqual(order.orderDetails.AdminOrderType, 'BTD');
+		assert.strictEqual(order.orderDetails.BTDOrderParams.Service.ServiceName, 'EOP');
+	});
+
+	// BTF codes (ServiceName=EOP, Scope=CH, MsgName=camt.053 v08, ZIP
+	// container) sourced from SIX Group's "EBICS 3.0 BTF-Codes CH" catalog
+	// and the Swiss Market Practice Guidelines for EBICS 3.0 - see
+	// lib/predefinedOrders/h005/Z53.js. Schema-valid here; not yet
+	// validated live against PostFinance (unlike this suite's INI/HIA/HPB
+	// coverage above).
+	it('serializes a BTD (camt.053 statement) download request as ebicsRequest, schema-valid against the real EBICS 3.0 schema', async () => {
+		const order = ebics.Orders.H005.Z53('2024-01-01', '2024-01-31');
+		const xml = await client.signOrder(order);
+		const doc = new DOMParser().parseFromString(xml, 'text/xml');
+
+		assert.strictEqual(doc.documentElement.tagName, 'ebicsRequest');
+		assert.include(xml, '<AdminOrderType>BTD</AdminOrderType>');
+		assert.include(xml, '<ServiceName>EOP</ServiceName>');
+		assert.include(xml, '<Scope>CH</Scope>');
+		assert.include(xml, 'containerType="ZIP"');
+		assert.include(xml, '<MsgName version="08">camt.053</MsgName>');
+		assert.include(xml, '<Start>2024-01-01</Start>');
+		assert.include(xml, '<End>2024-01-31</End>');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('omits DateRange when no start/end is given, and still validates', async () => {
+		const xml = await client.signOrder(ebics.Orders.H005.Z53());
+
+		assert.notInclude(xml, '<DateRange>');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('accepts a scope/msgVersion override for non-Swiss BTF conventions (e.g. Germany also uses EOP/camt.053, under Scope=DE)', async () => {
+		const order = ebics.Orders.H005.Z53(null, null, { scope: 'DE', msgVersion: '04' });
+
+		assert.strictEqual(order.orderDetails.BTDOrderParams.Service.Scope, 'DE');
+
+		const xml = await client.signOrder(order);
+		assert.include(xml, '<Scope>DE</Scope>');
+		assert.include(xml, '<MsgName version="04">camt.053</MsgName>');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	// Simulates a bank's BTD response (encrypted/deflated ZIP-wrapped order
+	// data, the same shape a real PostFinance response would have per Swiss
+	// market practice) end to end: response.js's orderData() decrypts and
+	// inflates it, then utils.unzip() extracts the camt.053 file inside -
+	// proving the two pieces (already-generic response parsing + the new
+	// unzip helper) actually work together, not just individually.
+	it('decrypts and unzips a simulated BTD response back to the original camt.053 content', async () => {
+		const keys = await client.keys();
+		const zip = new AdmZip();
+		const statementXml = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><statement/></Document>';
+		zip.addFile('camt.053.xml', Buffer.from(statementXml));
+
+		const transactionKey = crypto.randomBytes(16);
+		const iv = Buffer.from(Array(16).fill(0));
+		const cipher = crypto.createCipheriv('aes-128-cbc', transactionKey, iv).setAutoPadding(false);
+		const encryptedOrderData = Buffer.concat([
+			cipher.update(Crypto.pad(zlib.deflateSync(zip.toBuffer()))),
+			cipher.final(),
+		]).toString('base64');
+
+		const responseXml = `<?xml version="1.0" encoding="UTF-8"?>
+<ebicsResponse xmlns="urn:org:ebics:H005">
+  <header authenticate="true">
+    <static><TransactionID>TESTTRANSACTIONID</TransactionID></static>
+    <mutable><TransactionPhase>Initialisation</TransactionPhase></mutable>
+  </header>
+  <body>
+    <DataTransfer>
+      <DataEncryptionInfo authenticate="true">
+        <EncryptionPubKeyDigest Version="E002" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">${Crypto.digestPublicKey(keys.e())}</EncryptionPubKeyDigest>
+        <TransactionKey>${Crypto.publicEncrypt(keys.e(), transactionKey).toString('base64')}</TransactionKey>
+      </DataEncryptionInfo>
+      <OrderData>${encryptedOrderData}</OrderData>
+    </DataTransfer>
+    <ReturnCode>000000</ReturnCode>
+  </body>
+</ebicsResponse>`;
+
+		const response = H005Response(responseXml, keys);
+		const entries = utils.unzip(response.orderData());
+
+		assert.lengthOf(entries, 1);
+		assert.strictEqual(entries[0].name, 'camt.053.xml');
+		assert.strictEqual(entries[0].data.toString(), statementXml);
 	});
 });

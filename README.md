@@ -64,13 +64,16 @@ If all these steps were executed successfully, you can now do all things EBICS, 
 ### EBICS 3.0 (H005)
 
 EBICS 3.0's key-management orders (INI, HIA, HPB) are supported alongside
-H004, using X.509-certificate-wrapped keys as H005 requires. Use
-`Orders.H005.INI` / `.HIA` / `.HPB` instead of the flat `Orders.*`, and see
+H004, using X.509-certificate-wrapped keys as H005 requires, plus BTD
+statement download (`Orders.H005.Z53`, camt.053). Use `Orders.H005.INI` /
+`.HIA` / `.HPB` / `.Z53` instead of the flat `Orders.*`, and see
 [`examples/initialize-h005.js`](examples/initialize-h005.js) /
-[`examples/save-bank-keys-h005.js`](examples/save-bank-keys-h005.js). H005
-business order upload/download (BTU/BTD) is not yet implemented. Full
-details, a code example, and the H004/H005 structural differences: see
-[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
+[`examples/save-bank-keys-h005.js`](examples/save-bank-keys-h005.js) /
+[`examples/download-statement-h005.js`](examples/download-statement-h005.js).
+BTD's BTF parameters are sourced from published Swiss market practice, not
+yet validated live (unlike INI/HIA/HPB); business order upload (BTU) is not
+yet implemented. Full details, a code example, and the H004/H005 structural
+differences: see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
 
 ## Testing
 

@@ -5,6 +5,7 @@ const Orders = require('./lib/predefinedOrders');
 const fsKeysStorage = require('./lib/storages/fsKeysStorage');
 const tracesStorage = require('./lib/storages/tracesStorage');
 const BankLetter = require('./lib/BankLetter');
+const utils = require('./lib/utils');
 
 module.exports = {
 	Client,
@@ -12,4 +13,5 @@ module.exports = {
 	BankLetter,
 	fsKeysStorage,
 	tracesStorage,
+	utils,
 };
