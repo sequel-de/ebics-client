@@ -68,12 +68,25 @@ const resp = await client.send(Orders.H005.Z53('2024-01-01', '2024-01-31'));
 const files = utils.unzip(resp.orderData); // [{ name, data: Buffer }, ...]
 ```
 
-`Orders.H005.Z53(start, end, { scope, msgVersion })` also accepts a
-`scope`/`msgVersion` override, since the `ServiceName`/`MsgName`
-combination for camt.053 is shared with other markets (e.g. Germany also
-uses `EOP`/`camt.053`, under `Scope: 'DE'`) even though the BTF catalog as a
-whole is market-specific - see [how this differs from other EBICS
-countries](#how-btf-differs-by-country) below.
+Every field of the `Service` block is overridable -
+`Orders.H005.Z53(start, end, { scope, serviceName, msgName, msgVersion,
+container })` - not just `scope`/`msgVersion`, since the BTF catalog as a
+whole is market-specific (see [how this differs from other EBICS
+countries](#how-btf-differs-by-country) below), not just its `Scope` field.
+For example:
+
+```js
+// Germany's own BTF row for statement download (EOP/DE/camt.053/ZIP - the
+// ServiceName/Container happen to also match Switzerland's; Scope doesn't):
+Orders.H005.Z53(start, end, { scope: 'DE' });
+
+// A different Swiss BTF row entirely - STM/CH/camt.052 (intraday statement)
+// instead of the default EOP/CH/camt.053 (end-of-period):
+Orders.H005.Z53(start, end, { serviceName: 'STM', msgName: 'camt.052' });
+
+// A market/message combination that doesn't use a ZIP container:
+Orders.H005.Z53(start, end, { container: false });
+```
 
 ### How BTF differs by country
 
@@ -91,9 +104,11 @@ published separately by that country's own banking community:
 `ServiceName` for statement download happens to line up between CH and DE;
 it does not for payment upload, and France layers its own legacy CFONB
 message formats into the BTF framework alongside ISO 20022. This is why
-`Z53`'s BTF values are overridable rather than hardcoded - extending this
-to another market means supplying that market's own catalog values, not
-assuming Switzerland's.
+every field of `Z53`'s BTF `Service` block is overridable rather than only
+`Scope` - extending this to another market means supplying that market's
+own catalog values (`serviceName`/`msgName`/`container` included), not
+assuming Switzerland's `ServiceName`/`Container` will happen to match the
+way Germany's does.
 
 ## What's not supported (yet)
 

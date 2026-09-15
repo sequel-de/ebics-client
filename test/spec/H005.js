@@ -273,6 +273,33 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
+	// Every BTF field is overridable, not just scope/msgVersion - proven here
+	// with a different Swiss BTF row entirely: STM/CH/camt.052 v08 (intraday
+	// statement) instead of the default EOP/CH/camt.053 (end-of-period), per
+	// SIX Group's "EBICS 3.0 BTF-Codes CH" catalog.
+	it('accepts a full serviceName/scope/msgName/msgVersion override for an entirely different BTF row', async () => {
+		const order = ebics.Orders.H005.Z53(null, null, {
+			serviceName: 'STM', scope: 'CH', msgName: 'camt.052', msgVersion: '08',
+		});
+
+		assert.strictEqual(order.orderDetails.BTDOrderParams.Service.ServiceName, 'STM');
+
+		const xml = await client.signOrder(order);
+		assert.include(xml, '<ServiceName>STM</ServiceName>');
+		assert.include(xml, '<MsgName version="08">camt.052</MsgName>');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('omits the Container element entirely when container: false is passed, for a market/message that does not use one', async () => {
+		const order = ebics.Orders.H005.Z53(null, null, { container: false });
+
+		assert.isUndefined(order.orderDetails.BTDOrderParams.Service.Container);
+
+		const xml = await client.signOrder(order);
+		assert.notInclude(xml, '<Container');
+		assert.isTrue(await validateXML(xml));
+	});
+
 	// Simulates a bank's BTD response (encrypted/deflated ZIP-wrapped order
 	// data, the same shape a real PostFinance response would have per Swiss
 	// market practice) end to end: response.js's orderData() decrypts and
