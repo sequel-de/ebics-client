@@ -23,12 +23,13 @@ Key generation, signing, and the bank-key digest computation are all
 H005-aware (see [Key differences from H004](#key-differences-from-h004)
 below).
 
-INI/HIA/HPB have been validated both against the real EBICS 3.0 schema (see
-[Testing](#testing)) and live against
-[PostFinance](https://www.postfinance.ch)'s EBICS 3.0 ISO test environment
-- all three returned `EBICS_OK`, including parsing the bank's real
-certificate-bearing HPB response. **BTD is schema-validated but not yet
-live-validated** - see the caveat below.
+INI/HIA/HPB/BTD have been validated both against the real EBICS 3.0 schema
+(see [Testing](#testing)) and live against
+[PostFinance](https://www.postfinance.ch)'s EBICS 3.0 ISO test environment.
+INI/HIA/HPB all returned `EBICS_OK`, including parsing the bank's real
+certificate-bearing HPB response. **BTD returned `EBICS_OK` at the
+technical level too, but its data round-trip is still unverified** - see
+the caveat below.
 
 ## Business order download (BTD)
 
@@ -51,10 +52,22 @@ CH"](https://www.six-group.com/dam/download/banking-services/interbank-clearing/
 catalog and the **[Swiss Market Practice Guidelines for EBICS
 3.0](https://www.six-group.com/dam/download/banking-services/standardization/ebics/market-practice-guidelines-ebics3.0-v1.3-en.pdf)**
 - the same national interbank-clearing standard PostFinance and every other
-Swiss EBICS bank implements - not from a live PostFinance response.
-**Confirm against PostFinance's ISO test environment before relying on this
-in production**, the same bar INI/HIA/HPB were held to before being called
-done.
+Swiss EBICS bank implements - and have been **live-validated against
+PostFinance's EBICS 3.0 ISO test environment**: a BTD request built with
+these exact parameters returned `technicalCode: 000000`/`EBICS_OK` both
+with no date range and again with an explicit `2024-01-01`-`2026-09-15`
+window, meaning PostFinance's live system accepts and correctly processes
+the request as built.
+
+Both attempts also came back with `businessCode: 090005`/
+`EBICS_NO_DOWNLOAD_DATA_AVAILABLE` - no statement data exists for this test
+subscriber (the identical result with and without a date range rules out
+the window being the cause). So while the request shape itself is proven
+against a real bank, the decrypt/unzip path for an *actual* downloaded
+statement is still only exercised by this library's own synthetic test
+fixture (see [Testing](#testing)), not real bank-encrypted data. If your
+bank's test environment has statement data seeded, confirming that
+round-trip too is worthwhile before relying on this in production.
 
 Statement downloads are delivered ZIP-wrapped per Swiss market practice
 (mandatory for camt.053/054/052 in CH/LI, not optional); `orderData()`
@@ -195,9 +208,12 @@ the same shape a real bank response would have) through `response.js` and
 `utils.unzip()` back to the original statement content.
 
 Schema validity doesn't prove a real bank will accept a request (that's
-what the live PostFinance validation above covers for INI/HIA/HPB) - but it
-does catch the entire class of bug this implementation actually hit during
-development (an invalid `OrderDetails` shape that no bank should ever
-accept). BTD's `Service`/BTF values are sourced from published market
-practice, not a live response, so treat it with the same caution the "not
-yet live-validated" note above calls out.
+what the live PostFinance validation above covers for INI/HIA/HPB, and now
+BTD's request shape too) - but it does catch the entire class of bug this
+implementation actually hit during development (an invalid `OrderDetails`
+shape that no bank should ever accept). BTD's `Service`/BTF values are
+sourced from published market practice and have been live-validated
+against PostFinance at the technical (`EBICS_OK`) level, but the
+decrypt/unzip path for actual returned statement data has only been
+exercised against this library's own synthetic fixture - see the caveat in
+[Business order download (BTD)](#business-order-download-btd) above.

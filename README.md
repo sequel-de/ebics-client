@@ -72,10 +72,14 @@ statement download (`Orders.H005.Z53`, camt.053). Use `Orders.H005.INI` /
 [`examples/download-statement-h005.js`](examples/download-statement-h005.js).
 BTD's BTF parameters (`ServiceName`/`Scope`/`MsgName`/`Container`) default
 to published Swiss market practice but are fully overridable for other
-banks/markets/message types, and are not yet validated live (unlike
-INI/HIA/HPB); business order upload (BTU) is not yet implemented. Full
-details, a code example (including overriding the BTF defaults, and how
-they differ by country), and the H004/H005 structural differences: see
+banks/markets/message types, and (like INI/HIA/HPB) have been live-tested
+against PostFinance's ISO test environment - it returned `EBICS_OK`, though
+the actual data round-trip is still unverified since that test subscriber
+has no statement data seeded (see
+[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for the caveat); business
+order upload (BTU) is not yet implemented. Full details, a code example
+(including overriding the BTF defaults, and how they differ by country),
+and the H004/H005 structural differences: see
 [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
 
 ## Testing
@@ -127,7 +131,7 @@ The client is currently tested and verified to work with the following banks:
 -   [Bank GPB International S.A.](https://gazprombank.lu/e-banking)
 -   [Bank GPB AO](https://gazprombank.ru/)
 -   [J.P. Morgan](https://www.jpmorgan.com/)
--   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB), validated against their ISO test environment
+-   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB) and BTD statement download, validated against their ISO test environment
 
 ## Inspiration
 
