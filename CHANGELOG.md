@@ -1,6 +1,10 @@
 ### Changelog
 
-#### 5.1.1
+#### [v5.2.0](https://github.com/sequel-de/ebics-client/compare/v5.1.1...v5.2.0)
+
+#### v5.1.1
+
+> 15 September 2026
 
 - Auto-publish a patch release on every merge to main [`#2`](https://github.com/sequel-de/ebics-client/pull/2)
 - H005 btu btd [`#1`](https://github.com/sequel-de/ebics-client/pull/1)
@@ -46,4 +50,4 @@
 
 - feat: update dependencies [`a03ec22`](https://github.com/sequel-de/ebics-client/commit/a03ec2283fdd3dcf750c5ed448f0195d92c5c9f0)
 - chore: Update dev dependency libxmljs [`3a8dc1d`](https://github.com/sequel-de/ebics-client/commit/3a8dc1da0bac20a6f25a687da0a783f3b52d5163)
-- Bundle real EBICS 3.0 (H005) XSD schemas, validate test suite against them [`b512a89`](https://github.com/sequel-de/ebics-client/commit/b512a89f5dd3e42194a90890bc65ac8fd58e8a93)
+- feat: prepare order generation tests [`e40f79c`](https://github.com/sequel-de/ebics-client/commit/e40f79cee68a194272c93f07e763175b213a77a1)
