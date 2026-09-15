@@ -69,8 +69,18 @@ jobs:
       - name: Bump version, update CHANGELOG, commit and tag
         id: bump
         run: |
+          # `npm version` runs the "version" script (auto-changelog) as
+          # part of the bump, which prints its own "> version" / "> ..."
+          # lifecycle banner to stdout ahead of the final "vX.Y.Z" line -
+          # so capturing its output directly as $(npm version ...) grabs
+          # that whole multi-line banner, not just the tag, and writing
+          # that straight into $GITHUB_OUTPUT breaks the file-command
+          # parser (it expects single-line "key=value" entries). Let
+          # npm's output go to the log as normal, and read the new
+          # version back out of package.json afterwards instead.
           BUMP_TYPE="${{ github.event.inputs.bump || 'patch' }}"
-          NEW_TAG=$(npm version "$BUMP_TYPE" -m "chore: release %s")
+          npm version "$BUMP_TYPE" -m "chore: release %s"
+          NEW_TAG="v$(node -p "require('./package.json').version")"
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
       - name: Push commit and tag
         run: git push --follow-tags
