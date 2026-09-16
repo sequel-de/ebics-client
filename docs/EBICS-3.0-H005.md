@@ -33,14 +33,14 @@ schema (see [Testing](#testing)) and live against
 INI/HIA/HPB all returned `EBICS_OK`, including parsing the bank's real
 certificate-bearing HPB response. **BTD returned `EBICS_OK` at the
 technical level too, but its data round-trip is still unverified** - see
-the caveat below. **BTU returned full `EBICS_OK` at both the technical and
-business level at the EBICS request/response level** - PostFinance's test
-environment fully accepted a real (if trivial) test payment - but that run
-predates the container fix described below, and PostFinance's own
-downstream end-of-day batch processing rejected the (unwrapped) file with
-a real error once it got there. See
-[Business order upload (BTU)](#business-order-upload-btu) for both
-caveats.
+the caveat below. **BTU (with its default `container: false` shape)
+returned full `EBICS_OK` at both the technical and business level** -
+PostFinance's test environment fully accepted a real (if trivial) test
+payment - though a later downstream end-of-day batch step reported an
+unrelated-looking error, and a `container: 'ZIP'` default was tried and
+found to make things worse (a hard rejection), not better. See
+[Business order upload (BTU)](#business-order-upload-btu) for the full
+history.
 
 > While building BTU, `BankPubKeyDigests` (used by both BTD and BTU) was
 > found to be computed with H004's modulus/exponent digest instead of
@@ -154,19 +154,20 @@ using Swiss market-practice values:
 | `ServiceName` | `MCT` |
 | `Scope` | `CH` |
 | `MsgName` | `pain.001`, version `09` |
-| `Container` | `ZIP` |
+| `Container` | not set (plain, unwrapped upload) |
 
 As with `Z53`, every field is overridable -
 `Orders.H005.CCT(document, { scope, serviceName, msgName, msgVersion,
 container, fileName, requestEDS })` - for other banks, markets or message
 types (see [how BTF differs by country](#how-btf-differs-by-country)
-above). `document` is the raw payment-file XML string to upload; when
-`container` is `'ZIP'` (the default), `lib/orders/H005/serializers/
-upload.js` wraps it into a single-entry ZIP archive before encrypting it
-(the entry is named after `fileName`, or `document.xml` if none is given) -
-see the container caveat below for why that's the default, and pass
-`container: false` for a market/message that uploads a plain, unwrapped
-document instead:
+above). `document` is the raw payment-file XML string to upload. Pass
+`container: 'ZIP'` for a bank/market whose BTF catalog expects a
+ZIP-wrapped upload - `lib/orders/H005/serializers/upload.js` then wraps
+`document` into a single-entry ZIP archive before encrypting it (the entry
+is named after `fileName`, or `document.xml` if none is given) - but see
+the container caveat below before turning it on for a new bank without
+confirming it first, since defaulting to it broke live uploads once
+already:
 
 ```js
 const fs = require('fs');
@@ -227,13 +228,13 @@ shape specifically. Worth re-running once you're testing against your own
 bank, since a stricter bank could plausibly behave differently for the
 two shapes even where PostFinance didn't.
 
-**Second caveat, and the reason `container` now defaults to `'ZIP'`:**
-that same run also predates the container fix below. It used this
-library's original default, `container: false` - a plain, unwrapped XML
-upload - and PostFinance's EBICS layer still returned `EBICS_OK` for it.
-But when that payment (as part of a 9-file batch) was later run through
-PostFinance's test portal's "Simulate end of day" processing, the
-resulting protocol log reported a real business-level error:
+**Second caveat, on `container` and a real bug that's now fixed - but the
+default stays `false`.** That same original run used `container: false` -
+a plain, unwrapped XML upload - and PostFinance's EBICS layer returned
+`EBICS_OK` for it. But when that payment (as part of a 9-file batch) was
+later run through PostFinance's test portal's "Simulate end of day"
+processing, the resulting protocol log reported a real business-level
+error:
 
 ```
 Result: Invalid file format
@@ -241,21 +242,37 @@ Errors occurred while processing the ZIP archive
 Error message: File is no ZIP archive.
 ```
 
-In other words, `EBICS_OK` at the transport level didn't mean the payment
-was actually usable - PostFinance's downstream batch processing expected
-a ZIP-wrapped file and only surfaced the mismatch later, asynchronously.
-This also exposed a real bug: even when `container: 'ZIP'` was passed
-explicitly, `upload.js` never actually zipped the payload - it only added
-the `Container` BTF metadata to the request, so the flag was previously a
-no-op declaration. Both are fixed as of this version: `Orders.H005.CCT`
-now defaults `container` to `'ZIP'` (matching `Z53`'s BTD default), and
-`upload.js` genuinely ZIP-wraps `document` via `utils.zip()` before
-digesting/encrypting it, for both the `DataDigest` and the encrypted
-`OrderData`. This hasn't yet been re-validated against PostFinance's EOD
-processing end-to-end (that requires a live re-run, not just schema
-validation) - if you're the one running that re-test, it's worth
-confirming the resulting statement/EOD batch no longer reports this
-error.
+That looked like evidence that PostFinance expected a ZIP-wrapped upload,
+and it exposed a genuine bug worth fixing regardless: even when
+`container: 'ZIP'` was passed explicitly, `upload.js` never actually
+zipped the payload - it only added the `Container` BTF metadata to the
+request, so the flag was a no-op declaration. That part is fixed:
+`upload.js` now genuinely ZIP-wraps `document` via `utils.zip()` (see
+`utils.js`) before digesting/encrypting it, for both `DataDigest` and the
+encrypted `OrderData`, whenever `container: 'ZIP'` is passed.
+
+Changing `Orders.H005.CCT`'s *default* to `'ZIP'` on the strength of that
+evidence, however, was wrong, and got caught on a live re-test: submitting
+the same 9-file batch with `container: 'ZIP'` as the default made
+PostFinance reject every single upload outright, at the technical level,
+with `technicalCode: 091005` / `EBICS_INVALID_ORDER_TYPE` ("order type is
+unknown or not approved for use with EBICS") - worse than the original
+problem, and a regression against the `container: false` shape that had
+already been live-validated end-to-end. The most likely explanation: this
+subscriber's actual approved BTF catalog entry for `MCT`/`CH`/`pain.001`
+uploads has no `Container` variant at all, so declaring one doesn't just
+get ignored - it makes the whole request match no admissible order type.
+So the default is back to `false`, matching the one shape that's actually
+been live-validated working end-to-end; `container: 'ZIP'` remains
+available (and now actually functional) for a bank/market whose BTF
+catalog does support it.
+
+The original "File is no ZIP archive" protocol error's real cause is
+still open - it's evidently not "BTU uploads need to default to
+ZIP-wrapped for this subscriber", since that made things worse, not
+better. If you're testing against PostFinance (or another EBICS 3.0 bank)
+and get further signal on what that error actually referred to, it'd be
+worth revisiting this.
 
 Note when reproducing this: `client.upload()` (and therefore
 `client.send()` for a BTU order) only returns `[transactionId, orderId]`,
@@ -353,10 +370,11 @@ have been live-validated against PostFinance at the technical (`EBICS_OK`)
 level, but the decrypt/unzip path for actual returned statement data has
 only been exercised against this library's own synthetic fixture - see
 the caveat in [Business order download (BTD)](#business-order-download-btd)
-above. BTU returned a full `EBICS_OK` at both the technical and business
-level at the EBICS request/response level, but that same run surfaced a
-real downstream processing error once PostFinance's own end-of-day batch
-job tried to read the (at-the-time unwrapped) file, which is what led to
-`container` defaulting to `'ZIP'` and `upload.js` actually implementing
-the ZIP-wrapping - see both caveats under
+above. BTU (with its default, unwrapped `container: false` shape) returned
+a full `EBICS_OK` at both the technical and business level; a later
+downstream end-of-day batch step surfaced an unrelated-looking error, and
+trying a ZIP-wrapped default in response made things worse (a hard
+rejection) rather than better, so the default stays `container: false` -
+`upload.js` now genuinely implements the ZIP-wrapping for `container:
+'ZIP'`, it's just not the default. See both caveats under
 [Business order upload (BTU)](#business-order-upload-btu).

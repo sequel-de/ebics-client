@@ -361,7 +361,7 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.strictEqual(order.document, '<Document/>');
 	});
 
-	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName but a ZIP Container by default and SignatureFlag always present', async () => {
+	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container by default but SignatureFlag always present', async () => {
 		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
 		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
 		const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -372,7 +372,7 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.include(xml, '<Scope>CH</Scope>');
 		assert.include(xml, '<MsgName version="09">pain.001</MsgName>');
 		assert.notInclude(xml, 'fileName=');
-		assert.include(xml, 'containerType="ZIP"');
+		assert.notInclude(xml, '<Container');
 		// SignatureFlag's absence specifically means "no ES, authorise
 		// outside EBICS" per the H005 schema's own documentation (see
 		// lib/predefinedOrders/h005/CCT.js) - since upload.js always embeds
@@ -382,37 +382,37 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	it('omits the Container element entirely when container: false is passed, for a market/message that uploads a plain, unwrapped document', async () => {
+	it('includes a Container element when container: "ZIP" is explicitly requested, for a bank/market whose BTF catalog supports it', async () => {
 		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
-		const order = ebics.Orders.H005.CCT(document, { container: false });
+		const order = ebics.Orders.H005.CCT(document, { container: 'ZIP' });
 		const xml = await client.signOrder(order);
 
-		assert.isUndefined(order.orderDetails.BTUOrderParams.Service.Container);
-		assert.notInclude(xml, '<Container');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.Container['@'].containerType, 'ZIP');
+		assert.include(xml, 'containerType="ZIP"');
 		assert.isTrue(await validateXML(xml));
 	});
 
-	it('computes DataDigest as the SHA-256 digest of the ZIP-wrapped document, base64-encoded, when container defaults to ZIP', async () => {
+	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded, by default (no container)', async () => {
 		const document = '<Document>\n  <Foo/>\n</Document>';
 		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
-
-		const expectedDigest = crypto.createHash('sha256').update(utils.zip('document.xml', document)).digest('base64').trim();
-
-		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
-	});
-
-	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded, when container: false is passed', async () => {
-		const document = '<Document>\n  <Foo/>\n</Document>';
-		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { container: false }));
 
 		const expectedDigest = crypto.createHash('sha256').update(document.replace(/\n|\r/g, '')).digest('base64').trim();
 
 		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
 	});
 
-	it('uses fileName as the ZIP entry name when both fileName and a ZIP container are set', async () => {
+	it('computes DataDigest as the SHA-256 digest of the ZIP-wrapped document, base64-encoded, when container: "ZIP" is explicitly requested', async () => {
+		const document = '<Document>\n  <Foo/>\n</Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { container: 'ZIP' }));
+
+		const expectedDigest = crypto.createHash('sha256').update(utils.zip('document.xml', document)).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('uses fileName as the ZIP entry name when both fileName and container: "ZIP" are set', async () => {
 		const document = '<Document/>';
-		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { fileName: 'payments.xml' }));
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { fileName: 'payments.xml', container: 'ZIP' }));
 
 		const expectedDigest = crypto.createHash('sha256').update(utils.zip('payments.xml', document)).digest('base64').trim();
 
@@ -473,20 +473,20 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		return zlib.inflateSync(unpadded);
 	};
 
-	it('carries the document through Initialisation and Transfer phases, ZIP-wrapped, so the bank can decrypt and unzip back the original bytes', async () => {
+	it('carries the document through Initialisation and Transfer phases as plain XML by default, so the bank can decrypt back the original bytes', async () => {
 		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
 		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document));
+
+		assert.strictEqual(orderData.toString(), document.replace(/\n|\r/g, ''));
+	});
+
+	it('carries the document through Initialisation and Transfer phases, ZIP-wrapped, when container: "ZIP" is explicitly requested', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document, { container: 'ZIP' }));
 
 		const entries = utils.unzip(orderData);
 		assert.lengthOf(entries, 1);
 		assert.strictEqual(entries[0].name, 'document.xml');
 		assert.strictEqual(entries[0].data.toString(), document);
-	});
-
-	it('carries the document through Initialisation and Transfer phases as plain XML when container: false is passed', async () => {
-		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
-		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document, { container: false }));
-
-		assert.strictEqual(orderData.toString(), document.replace(/\n|\r/g, ''));
 	});
 });
