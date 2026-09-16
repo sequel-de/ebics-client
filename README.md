@@ -13,7 +13,19 @@
 
 Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
-The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation, for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**.
+The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initialization process (INI, HIA, HPB orders) for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**. HTML letter generation currently only produces a correct fingerprint for H004 - see the [EBICS 3.0 (H005)](#ebics-30-h005) section below.
+
+## Contents
+
+- [Install](#install)
+- [Usage](#usage)
+  - [Initialization](#initialization)
+  - [EBICS 3.0 (H005)](#ebics-30-h005)
+- [Testing](#testing)
+- [Releasing](#releasing)
+- [Supported Banks](#supported-banks)
+- [Inspiration](#inspiration)
+- [Copyright](#copyright)
 
 ## Install
 
@@ -41,11 +53,11 @@ const { Client, Orders, fsKeysStorage } = require('@sequel-de/ebics-client');
 
 ## Usage
 
-For examples on how to use this library, take a look at the [examples](https://github.com/sequel-de/ebics-client/tree/master/examples).
+For examples on how to use this library, take a look at the [examples](https://github.com/sequel-de/ebics-client/tree/main/examples).
 
 ### Initialization
 
-1. Create a configuration (see [example configs](https://github.com/sequel-de/ebics-client/tree/master/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
+1. Create a configuration (see [example configs](https://github.com/sequel-de/ebics-client/tree/main/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
 
     - The fields `url`, `partnerId`, `userId`, `hostId` are provided by your bank.
     - The `passphrase` is used to encrypt the keys file, which will be stored at the `storageLocation`.
@@ -134,7 +146,9 @@ why the bump workflow publishes itself rather than relying on it.
 
 ## Supported Banks
 
-The client is currently tested and verified to work with the following banks:
+The client is currently tested and verified to work with the following banks.
+
+### EBICS 2.5 (H004)
 
 -   [Credit Suisse (Schweiz) AG](https://www.credit-suisse.com/ch/en.html)
 -   [Zürcher Kantonalbank](https://www.zkb.ch/en/lg/ew.html)
@@ -143,7 +157,10 @@ The client is currently tested and verified to work with the following banks:
 -   [Bank GPB International S.A.](https://gazprombank.lu/e-banking)
 -   [Bank GPB AO](https://gazprombank.ru/)
 -   [J.P. Morgan](https://www.jpmorgan.com/)
--   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB), BTD statement download and BTU payment upload, validated against their ISO test environment
+
+### EBICS 3.0 (H005)
+
+-   [PostFinance](https://www.postfinance.ch/) - live-validated against their ISO test environment; see [EBICS 3.0 (H005)](#ebics-30-h005) above and [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for exactly what was tested and how
 
 ## Inspiration
 
