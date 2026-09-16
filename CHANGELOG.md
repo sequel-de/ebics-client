@@ -1,6 +1,18 @@
 ### Changelog
 
+#### [v5.2.1](https://github.com/sequel-de/ebics-client/compare/v5.2.0...v5.2.1)
+
+- H005 btu [`#3`](https://github.com/sequel-de/ebics-client/pull/3)
+
+- feat: BTU (business order upload) support for EBICS 3.0 (H005) [`b9b9bfc`](https://github.com/sequel-de/ebics-client/commit/b9b9bfcf3da18a5b4b4049e295d27d1153bd34bb)
+- docs: document BTU support and add an upload example [`fe74e54`](https://github.com/sequel-de/ebics-client/commit/fe74e54a78de2a7f5a27cdb0d8293b9ac2209788)
+- fix: actually ZIP-wrap BTU uploads, default container to ZIP [`64ef377`](https://github.com/sequel-de/ebics-client/commit/64ef377142c828983a795e3d740ef5577291346e)
+
 #### [v5.2.0](https://github.com/sequel-de/ebics-client/compare/v5.1.1...v5.2.0)
+
+> 15 September 2026
+
+- chore: release 5.2.0 [`55825e9`](https://github.com/sequel-de/ebics-client/commit/55825e926460bf89bc854978507869486703d33a)
 
 #### v5.1.1
 
