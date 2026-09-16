@@ -1,0 +1,182 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8">
+	<meta charset="UTF-8" />
+	<title>EBICS ini</title>
+</head>
+
+<body>
+	<div>
+		<h2>EBICS-Initialization letter (INI)</h2>
+		<table>
+			<tr>
+				<td>Date</td>
+				<td>{{ today }}</td>
+			</tr>
+			<tr>
+				<td>Time</td>
+				<td>{{ now }}</td>
+			</tr>
+			<tr>
+				<td>Recipient</td>
+				<td>{{ bankName }}</td>
+			</tr>
+			<tr>
+				<td>User ID</td>
+				<td>{{ userId }}</td>
+			</tr>
+			<tr>
+				<td>Customer ID</td>
+				<td>{{ partnerId }}</td>
+			</tr>
+		</table>
+		<p>Certificate for the electronic signature key (A006)</p>
+		<table>
+			<tr>
+				<td>Subject (CN)</td>
+				<td>{{ certSubject A006 }}</td>
+			</tr>
+			<tr>
+				<td>Serial number</td>
+				<td><code>{{ certSerial A006 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valid until</td>
+				<td>{{ certValidUntil A006 }}</td>
+			</tr>
+		</table>
+		<p>SHA-256 fingerprint of the certificate:</p>
+		<p>
+			<code>{{ certDigest A006 }}</code>
+		</p>
+		<p>I hereby confirm the above certificate for my electronic signature.</p>
+		<br/>
+		<br/>
+		<br/>
+		<br/>
+		<table>
+			<tr>
+				<td>_________________________</td>
+				<td>_________________________</td>
+				<td>_________________________</td>
+			</tr>
+			<tr>
+				<td>City/Date</td>
+				<td>Name/Company</td>
+				<td>Signature</td>
+			</tr>
+		</table>
+	</div>
+	<div style="page-break-after:always"></div>
+	<h2>EBICS-Initialization letter (HIA) - Page 1/2</h2>
+	<table>
+		<tr>
+			<td>Date</td>
+			<td>{{ today }}</td>
+		</tr>
+		<tr>
+			<td>Time</td>
+			<td>{{ now }}</td>
+		</tr>
+		<tr>
+			<td>Recipient</td>
+			<td>{{ bankName }}</td>
+		</tr>
+		<tr>
+			<td>User ID</td>
+			<td>{{ userId }}</td>
+		</tr>
+		<tr>
+			<td>Customer ID</td>
+			<td>{{ partnerId }}</td>
+		</tr>
+	</table>
+	<div>
+		<p>Certificate for the identification/authentication key (X002)</p>
+		<table>
+			<tr>
+				<td>Subject (CN)</td>
+				<td>{{ certSubject X002 }}</td>
+			</tr>
+			<tr>
+				<td>Serial number</td>
+				<td><code>{{ certSerial X002 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valid until</td>
+				<td>{{ certValidUntil X002 }}</td>
+			</tr>
+		</table>
+		<p>SHA-256 fingerprint of the certificate:</p>
+		<p>
+			<code>{{ certDigest X002 }}</code>
+		</p>
+		<p> Continuation on Page 2 ...</p>
+		<div style="page-break-after:always"></div>
+		<h2>EBICS-Initialization letter (HIA) - Page 2/2</h2>
+		<table>
+			<tr>
+				<td>Date</td>
+				<td>{{ today }}</td>
+			</tr>
+			<tr>
+				<td>Time</td>
+				<td>{{ now }}</td>
+			</tr>
+			<tr>
+				<td>Recipient</td>
+				<td>{{ bankName }}</td>
+			</tr>
+			<tr>
+				<td>User ID</td>
+				<td>{{ userId }}</td>
+			</tr>
+			<tr>
+				<td>Customer ID</td>
+				<td>{{ partnerId }}</td>
+			</tr>
+		</table>
+	</div>
+	<div>
+		<p>Certificate for the encryption key (E002)</p>
+		<table>
+			<tr>
+				<td>Subject (CN)</td>
+				<td>{{ certSubject E002 }}</td>
+			</tr>
+			<tr>
+				<td>Serial number</td>
+				<td><code>{{ certSerial E002 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valid until</td>
+				<td>{{ certValidUntil E002 }}</td>
+			</tr>
+		</table>
+		<p>SHA-256 fingerprint of the certificate:</p>
+		<p>
+			<code>{{ certDigest E002 }}</code>
+		</p>
+		<p>I hereby confirm the above certificates for my EBICS access.</p>
+		<br/>
+		<br/>
+		<br/>
+		<br/>
+		<table>
+			<tr>
+				<td>_________________________</td>
+				<td>_________________________</td>
+				<td>_________________________</td>
+			</tr>
+			<tr>
+				<td>City/Date</td>
+				<td>Name/Company</td>
+				<td>Signature</td>
+			</tr>
+		</table>
+	</div>
+</body>
+
+</html>

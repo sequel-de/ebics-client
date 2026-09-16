@@ -279,17 +279,18 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	it('decrypts and unzips a simulated BTD response back to the original camt.053 content', async () => {
+	// Simulates a full BTD Initialisation-phase response carrying `zipBuffer`
+	// as the ZIP-wrapped, deflated, AES-encrypted OrderData - the same shape
+	// a real bank response has (see lib/orders/H005/response.js) - so the
+	// round-trip tests below exercise the actual decrypt/unzip path, not
+	// just utils.unzip() in isolation.
+	const simulatedBTDResponse = async (zipBuffer) => {
 		const keys = await client.keys();
-		const zip = new AdmZip();
-		const statementXml = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><statement/></Document>';
-		zip.addFile('camt.053.xml', Buffer.from(statementXml));
-
 		const transactionKey = crypto.randomBytes(16);
 		const iv = Buffer.from(Array(16).fill(0));
 		const cipher = crypto.createCipheriv('aes-128-cbc', transactionKey, iv).setAutoPadding(false);
 		const encryptedOrderData = Buffer.concat([
-			cipher.update(Crypto.pad(zlib.deflateSync(zip.toBuffer()))),
+			cipher.update(Crypto.pad(zlib.deflateSync(zipBuffer))),
 			cipher.final(),
 		]).toString('base64');
 
@@ -311,12 +312,112 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
   </body>
 </ebicsResponse>`;
 
-		const response = H005Response(responseXml, keys);
+		return H005Response(responseXml, keys);
+	};
+
+	it('decrypts and unzips a simulated BTD response back to the original camt.053 content', async () => {
+		const zip = new AdmZip();
+		const statementXml = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><statement/></Document>';
+		zip.addFile('camt.053.xml', Buffer.from(statementXml));
+
+		const response = await simulatedBTDResponse(zip.toBuffer());
 		const entries = utils.unzip(response.orderData());
 
 		assert.lengthOf(entries, 1);
 		assert.strictEqual(entries[0].name, 'camt.053.xml');
 		assert.strictEqual(entries[0].data.toString(), statementXml);
+	});
+
+	it('decrypts and unzips a realistic multi-statement camt.053.001.08 document (full ISO 20022 structure, not a stub)', async () => {
+		const statementXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>STMT-20260916-0001</MsgId>
+      <CreDtTm>2026-09-16T23:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STMT-0001</Id>
+      <ElctrncSeqNb>1</ElctrncSeqNb>
+      <CreDtTm>2026-09-16T23:00:00</CreDtTm>
+      <Acct>
+        <Id><IBAN>CH9300762011623852957</IBAN></Id>
+        <Ccy>CHF</Ccy>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">1000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-09-16</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">990.99</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-09-16</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="CHF">9.01</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-16</Dt></BookgDt>
+        <ValDt><Dt>2026-09-16</Dt></ValDt>
+        <BkTxCd><Prtry><Cd>PMNT</Cd></Prtry></BkTxCd>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>`;
+
+		const zip = new AdmZip();
+		zip.addFile('PFC00887_CH9300762011623852957_20260916.xml', Buffer.from(statementXml, 'utf8'));
+
+		const response = await simulatedBTDResponse(zip.toBuffer());
+		const entries = utils.unzip(response.orderData());
+
+		assert.lengthOf(entries, 1);
+		assert.strictEqual(entries[0].data.toString('utf8'), statementXml);
+	});
+
+	it('decrypts and unzips a multi-file BTD container (several statements batched into one response)', async () => {
+		const zip = new AdmZip();
+		const statements = [1, 2, 3].map(n => ({
+			name: `account-${n}.xml`,
+			content: `<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt><Id>STMT-${n}</Id></Stmt></BkToCstmrStmt></Document>`,
+		}));
+		statements.forEach(({ name, content }) => zip.addFile(name, Buffer.from(content, 'utf8')));
+
+		const response = await simulatedBTDResponse(zip.toBuffer());
+		const entries = utils.unzip(response.orderData());
+
+		assert.lengthOf(entries, 3);
+		statements.forEach(({ name, content }) => {
+			const entry = entries.find(e => e.name === name);
+			assert.isDefined(entry, `expected an entry named ${name}`);
+			assert.strictEqual(entry.data.toString('utf8'), content);
+		});
+	});
+
+	it('decrypts and unzips an empty-statement camt.053 (no transactions - a valid, if boring, real-world case)', async () => {
+		const statementXml = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt><Id>STMT-EMPTY</Id></Stmt></BkToCstmrStmt></Document>';
+		const zip = new AdmZip();
+		zip.addFile('empty.xml', Buffer.from(statementXml, 'utf8'));
+
+		const response = await simulatedBTDResponse(zip.toBuffer());
+		const entries = utils.unzip(response.orderData());
+
+		assert.lengthOf(entries, 1);
+		assert.strictEqual(entries[0].data.toString('utf8'), statementXml);
+	});
+
+	it('decrypts and unzips content with non-ASCII characters (e.g. remittance text), preserving UTF-8 encoding exactly', async () => {
+		const statementXml = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><RmtInf><Ustrd>Zürich – Straße 42, café ☕, 日本語</Ustrd></RmtInf></Document>';
+		const zip = new AdmZip();
+		zip.addFile('unicode.xml', Buffer.from(statementXml, 'utf8'));
+
+		const response = await simulatedBTDResponse(zip.toBuffer());
+		const entries = utils.unzip(response.orderData());
+
+		assert.strictEqual(entries[0].data.toString('utf8'), statementXml);
 	});
 });
 

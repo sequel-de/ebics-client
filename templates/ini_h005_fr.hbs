@@ -1,0 +1,182 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8">
+	<meta charset="UTF-8" />
+	<title>EBICS ini</title>
+</head>
+
+<body>
+	<div>
+		<h2>Lettre d'initialisation pour clés électroniques bancaires (INI)</h2>
+		<table>
+			<tr>
+				<td>Date</td>
+				<td>{{ today }}</td>
+			</tr>
+			<tr>
+				<td>Heure</td>
+				<td>{{ now }}</td>
+			</tr>
+			<tr>
+				<td>Banque</td>
+				<td>{{ bankName }}</td>
+			</tr>
+			<tr>
+				<td>ID Utilisateur</td>
+				<td>{{ userId }}</td>
+			</tr>
+			<tr>
+				<td>ID Partenaire</td>
+				<td>{{ partnerId }}</td>
+			</tr>
+		</table>
+		<p>Certificat pour la signature électronique (A006)</p>
+		<table>
+			<tr>
+				<td>Sujet (CN)</td>
+				<td>{{ certSubject A006 }}</td>
+			</tr>
+			<tr>
+				<td>Numéro de série</td>
+				<td><code>{{ certSerial A006 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valide jusqu'au</td>
+				<td>{{ certValidUntil A006 }}</td>
+			</tr>
+		</table>
+		<p>Empreinte SHA-256 du certificat:</p>
+		<p>
+			<code>{{ certDigest A006 }}</code>
+		</p>
+		<p>Je confirme par la présente le certificat ci-dessus pour ma signature électronique.</p>
+		<br/>
+		<br/>
+		<br/>
+		<br/>
+		<table>
+			<tr>
+				<td>_________________________</td>
+				<td>_________________________</td>
+				<td>_________________________</td>
+			</tr>
+			<tr>
+				<td>Lieu/Date</td>
+				<td>Nom/Entreprise</td>
+				<td>Signature</td>
+			</tr>
+		</table>
+	</div>
+	<div style="page-break-after:always"></div>
+	<h2>Lettre d'initialisation pour clés électroniques bancaires (HIA) - Page 1/2</h2>
+	<table>
+		<tr>
+			<td>Date</td>
+			<td>{{ today }}</td>
+		</tr>
+		<tr>
+			<td>Heure</td>
+			<td>{{ now }}</td>
+		</tr>
+		<tr>
+			<td>Banque</td>
+			<td>{{ bankName }}</td>
+		</tr>
+		<tr>
+			<td>ID Utilisateur</td>
+			<td>{{ userId }}</td>
+		</tr>
+		<tr>
+			<td>ID Partenaire</td>
+			<td>{{ partnerId }}</td>
+		</tr>
+	</table>
+	<div>
+		<p>Certificat pour la clé d'identification (X002)</p>
+		<table>
+			<tr>
+				<td>Sujet (CN)</td>
+				<td>{{ certSubject X002 }}</td>
+			</tr>
+			<tr>
+				<td>Numéro de série</td>
+				<td><code>{{ certSerial X002 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valide jusqu'au</td>
+				<td>{{ certValidUntil X002 }}</td>
+			</tr>
+		</table>
+		<p>Empreinte SHA-256 du certificat:</p>
+		<p>
+			<code>{{ certDigest X002 }}</code>
+		</p>
+		<p>Suite à la page 2 ...</p>
+		<div style="page-break-after:always"></div>
+		<h2>Lettre d'initialisation pour clés électroniques bancaires (HIA) - Page 2/2</h2>
+		<table>
+			<tr>
+				<td>Date</td>
+				<td>{{ today }}</td>
+			</tr>
+			<tr>
+				<td>Heure</td>
+				<td>{{ now }}</td>
+			</tr>
+			<tr>
+				<td>Banque</td>
+				<td>{{ bankName }}</td>
+			</tr>
+			<tr>
+				<td>ID Utilisateur</td>
+				<td>{{ userId }}</td>
+			</tr>
+			<tr>
+				<td>ID Partenaire</td>
+				<td>{{ partnerId }}</td>
+			</tr>
+		</table>
+	</div>
+	<div>
+		<p>Certificat pour la clé de chiffrement (E002)</p>
+		<table>
+			<tr>
+				<td>Sujet (CN)</td>
+				<td>{{ certSubject E002 }}</td>
+			</tr>
+			<tr>
+				<td>Numéro de série</td>
+				<td><code>{{ certSerial E002 }}</code></td>
+			</tr>
+			<tr>
+				<td>Valide jusqu'au</td>
+				<td>{{ certValidUntil E002 }}</td>
+			</tr>
+		</table>
+		<p>Empreinte SHA-256 du certificat:</p>
+		<p>
+			<code>{{ certDigest E002 }}</code>
+		</p>
+		<p>Je confirme par la présente les certificats ci-dessus.</p>
+		<br/>
+		<br/>
+		<br/>
+		<br/>
+		<table>
+			<tr>
+				<td>_________________________</td>
+				<td>_________________________</td>
+				<td>_________________________</td>
+			</tr>
+			<tr>
+				<td>Lieu/Date</td>
+				<td>Nom/Entreprise</td>
+				<td>Signature</td>
+			</tr>
+		</table>
+	</div>
+</body>
+
+</html>
