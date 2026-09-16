@@ -267,12 +267,24 @@ been live-validated working end-to-end; `container: 'ZIP'` remains
 available (and now actually functional) for a bank/market whose BTF
 catalog does support it.
 
-The original "File is no ZIP archive" protocol error's real cause is
-still open - it's evidently not "BTU uploads need to default to
-ZIP-wrapped for this subscriber", since that made things worse, not
-better. If you're testing against PostFinance (or another EBICS 3.0 bank)
-and get further signal on what that error actually referred to, it'd be
-worth revisiting this.
+**Resolution: the "File is no ZIP archive" error is a PostFinance
+test-portal limitation, not a BTU/container issue.** A follow-up test
+isolated the variable that actually mattered: the same 9 payment files,
+uploaded manually through the test portal's own "Upload payment file"
+widget instead of through EBICS/BTU, then run through "Simulate end of
+day" - and the ZIP error was gone entirely. Instead, all 9 files got real
+ISO 20022 business-level validation (`AC01`/`IncorrectAccountNumber`, for
+a placeholder debtor IBAN never registered to the test subscriber - an
+expected, unrelated error). So across three variants tested
+(`container: false` via EBICS, `container: 'ZIP'` via EBICS, and a plain
+manual portal upload of identical content), only the two EBICS-delivered
+paths ever hit the ZIP error, regardless of container setting - while the
+non-EBICS upload of the exact same payment content sailed past it. That
+rules out this library's BTU request shape as the cause: the most likely
+explanation is that PostFinance's "Simulate end of day" test feature
+doesn't correctly ingest files that arrived over the EBICS/BTU channel,
+as opposed to the portal's own upload widget - a limitation of their test
+environment, not something to fix here.
 
 Note when reproducing this: `client.upload()` (and therefore
 `client.send()` for a BTU order) only returns `[transactionId, orderId]`,
