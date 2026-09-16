@@ -1,6 +1,12 @@
 ### Changelog
 
+#### [v5.2.2](https://github.com/sequel-de/ebics-client/compare/v5.2.1...v5.2.2)
+
+- docs: close out the BTU ZIP-archive investigation [`e3304a7`](https://github.com/sequel-de/ebics-client/commit/e3304a79a25bd0ed8ae93820fd4fea652d3a7438)
+
 #### [v5.2.1](https://github.com/sequel-de/ebics-client/compare/v5.2.0...v5.2.1)
+
+> 16 September 2026
 
 - H005 btu [`#3`](https://github.com/sequel-de/ebics-client/pull/3)
 
