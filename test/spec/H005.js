@@ -319,3 +319,116 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.strictEqual(entries[0].data.toString(), statementXml);
 	});
 });
+
+describe('H005 (EBICS 3.0) BTU business order upload', () => {
+	const keyPath = path.join(os.tmpdir(), `h005-btu-test-keys-${process.pid}-${Date.now()}.key`);
+	let client;
+	let bankE002; // kept as a Key (not just the cert pem) so tests can RSA-decrypt TransactionKey below
+
+	before(async () => {
+		client = new ebics.Client({
+			url: 'https://example-bank.test/ebicsweb',
+			partnerId: 'PARTNER1',
+			userId: 'USER1',
+			hostId: 'HOST1',
+			passphrase: 'test',
+			keyStorage: ebics.fsKeysStorage(keyPath),
+		});
+
+		await client._generateKeys('h005'); // eslint-disable-line no-underscore-dangle
+
+		bankE002 = Key.generateWithCertificate('encryption', { commonName: 'HOST1' });
+		await client.setBankKeys({
+			bankX002: { cert: Key.generateWithCertificate('authentication', { commonName: 'HOST1' }).toCertPem() },
+			bankE002: { cert: bankE002.toCertPem() },
+		});
+	});
+
+	after(() => {
+		if (fs.existsSync(keyPath)) fs.unlinkSync(keyPath);
+	});
+
+	it('Orders.H005.CCT is an h005-versioned BTU upload order definition, defaulting to Swiss MCT/CH/pain.001 v09', () => {
+		const order = ebics.Orders.H005.CCT('<Document/>');
+
+		assert.strictEqual(order.version, 'h005');
+		assert.strictEqual(order.operation, 'upload');
+		assert.strictEqual(order.orderDetails.AdminOrderType, 'BTU');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.ServiceName, 'MCT');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.Scope, 'CH');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.MsgName['@'].version, '09');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.MsgName['#'], 'pain.001');
+		assert.strictEqual(order.document, '<Document/>');
+	});
+
+	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container/SignatureFlag by default', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
+		const doc = new DOMParser().parseFromString(xml, 'text/xml');
+
+		assert.strictEqual(doc.documentElement.tagName, 'ebicsRequest');
+		assert.include(xml, '<AdminOrderType>BTU</AdminOrderType>');
+		assert.include(xml, '<ServiceName>MCT</ServiceName>');
+		assert.include(xml, '<Scope>CH</Scope>');
+		assert.include(xml, '<MsgName version="09">pain.001</MsgName>');
+		assert.notInclude(xml, 'fileName=');
+		assert.notInclude(xml, '<Container');
+		assert.notInclude(xml, '<SignatureFlag');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded (an H005-only requirement - see lib/orders/H005/serializers/upload.js)', async () => {
+		const document = '<Document>\n  <Foo/>\n</Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
+
+		const expectedDigest = crypto.createHash('sha256').update(document.replace(/\n|\r/g, '')).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('includes fileName as an attribute and SignatureFlag/requestEDS only when explicitly set', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', { fileName: 'payments.xml', requestEDS: true });
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, 'fileName="payments.xml"');
+		assert.include(xml, '<SignatureFlag requestEDS="true"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('accepts a full serviceName/scope/msgName/msgVersion/container override for a different market/message (e.g. a Germany pain.008 direct debit)', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', {
+			serviceName: 'SDD', scope: 'DE', msgName: 'pain.008', msgVersion: '02', container: 'ZIP',
+		});
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, '<ServiceName>SDD</ServiceName>');
+		assert.include(xml, '<Scope>DE</Scope>');
+		assert.include(xml, '<MsgName version="02">pain.008</MsgName>');
+		assert.include(xml, 'containerType="ZIP"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('carries the document through Initialisation and Transfer phases so the bank can decrypt back the original bytes', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const order = ebics.Orders.H005.CCT(document);
+
+		// Initialisation phase: TransactionKey is the AES key, RSA-encrypted to the bank's E002 key.
+		const initXml = await client.signOrder(order);
+		const initDoc = new DOMParser().parseFromString(initXml, 'text/xml');
+		const transactionKeyB64 = initDoc.getElementsByTagName('TransactionKey')[0].textContent;
+		const transactionKey = Crypto.privateDecrypt(bankE002, Buffer.from(transactionKeyB64, 'base64'));
+
+		// Transfer phase: same as the real client.upload() flow (lib/Client.js), which sets
+		// order.transactionId from the bank's Initialisation response before re-signing.
+		order.transactionId = 'TESTTRANSACTIONID';
+		const transferXml = await client.signOrder(order);
+		const transferDoc = new DOMParser().parseFromString(transferXml, 'text/xml');
+		const orderDataB64 = transferDoc.getElementsByTagName('OrderData')[0].textContent;
+
+		const decipher = crypto.createDecipheriv('aes-128-cbc', transactionKey, Buffer.alloc(16, 0)).setAutoPadding(false);
+		const padded = Buffer.concat([decipher.update(Buffer.from(orderDataB64, 'base64')), decipher.final()]);
+		const unpadded = padded.slice(0, padded.length - padded[padded.length - 1]);
+
+		assert.strictEqual(zlib.inflateSync(unpadded).toString(), document.replace(/\n|\r/g, ''));
+	});
+});
