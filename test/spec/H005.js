@@ -158,12 +158,12 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.strictEqual(Crypto.digestCertificate(keysWithBank.bankX()), expectedDigest);
 	});
 
-	it('rejects the upload (BTU) operation, which is not yet implemented', async () => {
+	it('rejects an operation H005 does not support', async () => {
 		try {
-			await serializerMiddleware.use({ version: 'h005', operation: 'upload', orderDetails: {} }, client);
-			assert.fail('expected serializer.use() to throw for an unimplemented H005 operation');
+			await serializerMiddleware.use({ version: 'h005', operation: 'nonsense', orderDetails: {} }, client);
+			assert.fail('expected serializer.use() to throw for an unsupported H005 operation');
 		} catch (e) {
-			assert.match(e.message, /does not yet implement/);
+			assert.match(e.message, /does not support/);
 		}
 	});
 });
@@ -218,6 +218,24 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.include(xml, '<Start>2024-01-01</Start>');
 		assert.include(xml, '<End>2024-01-31</End>');
 		assert.isTrue(await validateXML(xml));
+	});
+
+	it('computes BankPubKeyDigests as the certificate-DER digest (H005), not the modulus/exponent digest (H004)', async () => {
+		const xml = await client.signOrder(ebics.Orders.H005.Z53());
+		const keys = await client.keys();
+
+		const expectedAuth = Crypto.digestCertificate(keys.bankX());
+		const expectedEnc = Crypto.digestCertificate(keys.bankE());
+
+		assert.include(xml, `<Authentication Version="X002" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">${expectedAuth}</Authentication>`);
+		assert.include(xml, `<Encryption Version="E002" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">${expectedEnc}</Encryption>`);
+		// The two digest algorithms produce different output for the same
+		// cert-backed key (see lib/orders/H005/serializers/download.js) -
+		// assert against digestPublicKey too, so a regression back to the
+		// wrong algorithm still passes the loose `assert.include` checks
+		// above (both are valid-looking base64 strings) but fails here.
+		assert.notInclude(xml, Crypto.digestPublicKey(keys.bankX()));
+		assert.notInclude(xml, Crypto.digestPublicKey(keys.bankE()));
 	});
 
 	it('omits DateRange when no start/end is given, and still validates', async () => {
@@ -299,5 +317,176 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.lengthOf(entries, 1);
 		assert.strictEqual(entries[0].name, 'camt.053.xml');
 		assert.strictEqual(entries[0].data.toString(), statementXml);
+	});
+});
+
+describe('H005 (EBICS 3.0) BTU business order upload', () => {
+	const keyPath = path.join(os.tmpdir(), `h005-btu-test-keys-${process.pid}-${Date.now()}.key`);
+	let client;
+	let bankE002; // kept as a Key (not just the cert pem) so tests can RSA-decrypt TransactionKey below
+
+	before(async () => {
+		client = new ebics.Client({
+			url: 'https://example-bank.test/ebicsweb',
+			partnerId: 'PARTNER1',
+			userId: 'USER1',
+			hostId: 'HOST1',
+			passphrase: 'test',
+			keyStorage: ebics.fsKeysStorage(keyPath),
+		});
+
+		await client._generateKeys('h005'); // eslint-disable-line no-underscore-dangle
+
+		bankE002 = Key.generateWithCertificate('encryption', { commonName: 'HOST1' });
+		await client.setBankKeys({
+			bankX002: { cert: Key.generateWithCertificate('authentication', { commonName: 'HOST1' }).toCertPem() },
+			bankE002: { cert: bankE002.toCertPem() },
+		});
+	});
+
+	after(() => {
+		if (fs.existsSync(keyPath)) fs.unlinkSync(keyPath);
+	});
+
+	it('Orders.H005.CCT is an h005-versioned BTU upload order definition, defaulting to Swiss MCT/CH/pain.001 v09', () => {
+		const order = ebics.Orders.H005.CCT('<Document/>');
+
+		assert.strictEqual(order.version, 'h005');
+		assert.strictEqual(order.operation, 'upload');
+		assert.strictEqual(order.orderDetails.AdminOrderType, 'BTU');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.ServiceName, 'MCT');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.Scope, 'CH');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.MsgName['@'].version, '09');
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.MsgName['#'], 'pain.001');
+		assert.strictEqual(order.document, '<Document/>');
+	});
+
+	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container by default but SignatureFlag always present', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
+		const doc = new DOMParser().parseFromString(xml, 'text/xml');
+
+		assert.strictEqual(doc.documentElement.tagName, 'ebicsRequest');
+		assert.include(xml, '<AdminOrderType>BTU</AdminOrderType>');
+		assert.include(xml, '<ServiceName>MCT</ServiceName>');
+		assert.include(xml, '<Scope>CH</Scope>');
+		assert.include(xml, '<MsgName version="09">pain.001</MsgName>');
+		assert.notInclude(xml, 'fileName=');
+		assert.notInclude(xml, '<Container');
+		// SignatureFlag's absence specifically means "no ES, authorise
+		// outside EBICS" per the H005 schema's own documentation (see
+		// lib/predefinedOrders/h005/CCT.js) - since upload.js always embeds
+		// a real ES, the flag must always be present, just empty by default
+		// (no requestEDS attribute) rather than omitted.
+		assert.include(xml, '<SignatureFlag/>');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('includes a Container element when container: "ZIP" is explicitly requested, for a bank/market whose BTF catalog supports it', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
+		const order = ebics.Orders.H005.CCT(document, { container: 'ZIP' });
+		const xml = await client.signOrder(order);
+
+		assert.strictEqual(order.orderDetails.BTUOrderParams.Service.Container['@'].containerType, 'ZIP');
+		assert.include(xml, 'containerType="ZIP"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded, by default (no container)', async () => {
+		const document = '<Document>\n  <Foo/>\n</Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
+
+		const expectedDigest = crypto.createHash('sha256').update(document.replace(/\n|\r/g, '')).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('computes DataDigest as the SHA-256 digest of the ZIP-wrapped document, base64-encoded, when container: "ZIP" is explicitly requested', async () => {
+		const document = '<Document>\n  <Foo/>\n</Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { container: 'ZIP' }));
+
+		const expectedDigest = crypto.createHash('sha256').update(utils.zip('document.xml', document)).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('uses fileName as the ZIP entry name when both fileName and container: "ZIP" are set', async () => {
+		const document = '<Document/>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { fileName: 'payments.xml', container: 'ZIP' }));
+
+		const expectedDigest = crypto.createHash('sha256').update(utils.zip('payments.xml', document)).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('includes fileName as an attribute, and adds requestEDS="true" to SignatureFlag only when explicitly requested', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', { fileName: 'payments.xml', requestEDS: true });
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, 'fileName="payments.xml"');
+		assert.include(xml, '<SignatureFlag requestEDS="true"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('treats requestEDS: false the same as the default (SignatureFlag present but empty) - "true" is the only value the schema allows for the attribute', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', { requestEDS: false });
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, '<SignatureFlag/>');
+		assert.notInclude(xml, 'requestEDS');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('accepts a full serviceName/scope/msgName/msgVersion/container override for a different market/message (e.g. a Germany pain.008 direct debit)', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', {
+			serviceName: 'SDD', scope: 'DE', msgName: 'pain.008', msgVersion: '02', container: 'ZIP',
+		});
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, '<ServiceName>SDD</ServiceName>');
+		assert.include(xml, '<Scope>DE</Scope>');
+		assert.include(xml, '<MsgName version="02">pain.008</MsgName>');
+		assert.include(xml, 'containerType="ZIP"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	// Shared by both round-trip tests below: signs the order for both phases and
+	// returns the decrypted, inflated OrderData bytes the bank would end up with.
+	const roundTripOrderData = async (order) => {
+		// Initialisation phase: TransactionKey is the AES key, RSA-encrypted to the bank's E002 key.
+		const initXml = await client.signOrder(order);
+		const initDoc = new DOMParser().parseFromString(initXml, 'text/xml');
+		const transactionKeyB64 = initDoc.getElementsByTagName('TransactionKey')[0].textContent;
+		const transactionKey = Crypto.privateDecrypt(bankE002, Buffer.from(transactionKeyB64, 'base64'));
+
+		// Transfer phase: same as the real client.upload() flow (lib/Client.js), which sets
+		// order.transactionId from the bank's Initialisation response before re-signing.
+		order.transactionId = 'TESTTRANSACTIONID';
+		const transferXml = await client.signOrder(order);
+		const transferDoc = new DOMParser().parseFromString(transferXml, 'text/xml');
+		const orderDataB64 = transferDoc.getElementsByTagName('OrderData')[0].textContent;
+
+		const decipher = crypto.createDecipheriv('aes-128-cbc', transactionKey, Buffer.alloc(16, 0)).setAutoPadding(false);
+		const padded = Buffer.concat([decipher.update(Buffer.from(orderDataB64, 'base64')), decipher.final()]);
+		const unpadded = padded.slice(0, padded.length - padded[padded.length - 1]);
+
+		return zlib.inflateSync(unpadded);
+	};
+
+	it('carries the document through Initialisation and Transfer phases as plain XML by default, so the bank can decrypt back the original bytes', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document));
+
+		assert.strictEqual(orderData.toString(), document.replace(/\n|\r/g, ''));
+	});
+
+	it('carries the document through Initialisation and Transfer phases, ZIP-wrapped, when container: "ZIP" is explicitly requested', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document, { container: 'ZIP' }));
+
+		const entries = utils.unzip(orderData);
+		assert.lengthOf(entries, 1);
+		assert.strictEqual(entries[0].name, 'document.xml');
+		assert.strictEqual(entries[0].data.toString(), document);
 	});
 });

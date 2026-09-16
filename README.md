@@ -13,7 +13,19 @@
 
 Pure Node.js (>= 20) implementation of [EBICS](https://en.wikipedia.org/wiki/Electronic_Banking_Internet_Communication_Standard) (Electronic Banking Internet Communication). Tested on Node 20, 22 and 24.
 
-The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initializations process (INI, HIA, HPB orders) and HTML letter generation, for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**.
+The client is aimed to be 100% [ISO 20022](https://www.iso20022.org) compliant, and supports the complete initialization process (INI, HIA, HPB orders) for both **EBICS 2.5 (H004)** and **EBICS 3.0 (H005)**. HTML letter generation currently only produces a correct fingerprint for H004 - see the [EBICS 3.0 (H005)](#ebics-30-h005) section below.
+
+## Contents
+
+- [Install](#install)
+- [Usage](#usage)
+  - [Initialization](#initialization)
+  - [EBICS 3.0 (H005)](#ebics-30-h005)
+- [Testing](#testing)
+- [Releasing](#releasing)
+- [Supported Banks](#supported-banks)
+- [Inspiration](#inspiration)
+- [Copyright](#copyright)
 
 ## Install
 
@@ -41,11 +53,11 @@ const { Client, Orders, fsKeysStorage } = require('@sequel-de/ebics-client');
 
 ## Usage
 
-For examples on how to use this library, take a look at the [examples](https://github.com/sequel-de/ebics-client/tree/master/examples).
+For examples on how to use this library, take a look at the [examples](https://github.com/sequel-de/ebics-client/tree/main/examples).
 
 ### Initialization
 
-1. Create a configuration (see [example configs](https://github.com/sequel-de/ebics-client/tree/master/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
+1. Create a configuration (see [example configs](https://github.com/sequel-de/ebics-client/tree/main/examples/config)) with the EBICS credentials you received from your bank and name it in this schema: `config.<environment>.<bank>[.<entity>].json` (the entity is optional).
 
     - The fields `url`, `partnerId`, `userId`, `hostId` are provided by your bank.
     - The `passphrase` is used to encrypt the keys file, which will be stored at the `storageLocation`.
@@ -65,21 +77,25 @@ If all these steps were executed successfully, you can now do all things EBICS, 
 
 EBICS 3.0's key-management orders (INI, HIA, HPB) are supported alongside
 H004, using X.509-certificate-wrapped keys as H005 requires, plus BTD
-statement download (`Orders.H005.Z53`, camt.053). Use `Orders.H005.INI` /
-`.HIA` / `.HPB` / `.Z53` instead of the flat `Orders.*`, and see
+statement download (`Orders.H005.Z53`, camt.053) and BTU payment upload
+(`Orders.H005.CCT`, pain.001). Use `Orders.H005.INI` / `.HIA` / `.HPB` /
+`.Z53` / `.CCT` instead of the flat `Orders.*`, and see
 [`examples/initialize-h005.js`](examples/initialize-h005.js) /
 [`examples/save-bank-keys-h005.js`](examples/save-bank-keys-h005.js) /
-[`examples/download-statement-h005.js`](examples/download-statement-h005.js).
-BTD's BTF parameters (`ServiceName`/`Scope`/`MsgName`/`Container`) default
-to published Swiss market practice but are fully overridable for other
-banks/markets/message types, and (like INI/HIA/HPB) have been live-tested
-against PostFinance's ISO test environment - it returned `EBICS_OK`, though
-the actual data round-trip is still unverified since that test subscriber
-has no statement data seeded (see
-[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for the caveat); business
-order upload (BTU) is not yet implemented. Full details, a code example
-(including overriding the BTF defaults, and how they differ by country),
-and the H004/H005 structural differences: see
+[`examples/download-statement-h005.js`](examples/download-statement-h005.js) /
+[`examples/upload-payment-h005.js`](examples/upload-payment-h005.js).
+BTD/BTU's BTF parameters (`ServiceName`/`Scope`/`MsgName`/`Container`, plus
+`fileName`/`requestEDS` for BTU) default to published Swiss market
+practice but are fully overridable for other banks/markets/message types.
+INI/HIA/HPB/BTD/BTU have all been live-tested against PostFinance's ISO
+test environment - BTD returned `EBICS_OK`, though the actual data
+round-trip is still unverified since that test subscriber has no statement
+data seeded (see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for the
+caveat); **BTU returned a full `EBICS_OK` at both the technical and
+business level**, PostFinance's test environment fully accepting a real
+test payment end-to-end. Full details, a code example (including
+overriding the BTF defaults, and how they differ by country), and the
+H004/H005 structural differences: see
 [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
 
 ## Testing
@@ -130,7 +146,24 @@ why the bump workflow publishes itself rather than relying on it.
 
 ## Supported Banks
 
-The client is currently tested and verified to work with the following banks:
+This library implements the standard EBICS protocol - both **EBICS 2.5
+(H004)** and **EBICS 3.0 (H005)** - not a bank-specific integration, so it
+should work with any EBICS-compliant bank, in any country that uses EBICS,
+not only the ones below. The list here is just the banks this project has
+actually tested and confirmed against so far, not a compatibility
+whitelist - if your bank isn't listed, that most likely means nobody's
+reported testing it yet, not that it won't work.
+
+Country-specific differences do exist (e.g. H005's BTF catalog -
+`ServiceName`/`Scope`/`MsgName` - varies by country; see [how BTF differs
+by country](docs/EBICS-3.0-H005.md#how-btf-differs-by-country)), and this
+library's H005 order builders expose every BTF field as an override for
+exactly that reason, rather than hard-coding Swiss values. If you've
+successfully tested against a bank not listed here (any country, either
+EBICS version), a PR adding it - or opening an issue with what you tested
+- is welcome.
+
+### EBICS 2.5 (H004)
 
 -   [Credit Suisse (Schweiz) AG](https://www.credit-suisse.com/ch/en.html)
 -   [Zürcher Kantonalbank](https://www.zkb.ch/en/lg/ew.html)
@@ -139,7 +172,16 @@ The client is currently tested and verified to work with the following banks:
 -   [Bank GPB International S.A.](https://gazprombank.lu/e-banking)
 -   [Bank GPB AO](https://gazprombank.ru/)
 -   [J.P. Morgan](https://www.jpmorgan.com/)
--   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB) and BTD statement download, validated against their ISO test environment
+
+### EBICS 3.0 (H005)
+
+-   [PostFinance](https://www.postfinance.ch/) (Switzerland) - live-validated against their ISO test environment; see [EBICS 3.0 (H005)](#ebics-30-h005) above and [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for exactly what was tested and how
+
+EBICS 3.0 is mandated or in use well beyond Switzerland - notably Germany
+(DK) and France (CFONB), each with their own BTF catalog and, in France's
+case, legacy CFONB message formats layered into the same BTU/BTD framework
+(see the country comparison table linked above). None of those have been
+tested against a live bank yet - only PostFinance has.
 
 ## Inspiration
 

@@ -32,3 +32,10 @@ npm-debug.log
 # bank). Anyone extending this library's live-bank testing should keep
 # using this naming convention rather than inventing a new one.
 *.local.*
+
+# One-off verification scripts and their sample data (e.g. a script that
+# submits a live test payment against a real bank, and the payment file it
+# uploads) - unlike examples/, nothing under here is curated/documented for
+# other users, so none of it is meant to be committed. Put ad-hoc scripts
+# and fixtures used to manually verify something against a live bank here.
+/local/
