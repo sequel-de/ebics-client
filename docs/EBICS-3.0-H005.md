@@ -22,6 +22,12 @@ differs from H004 under the hood, and how to test it.
   files (e.g. pain.001 credit transfers), EBICS 3.0's replacement for
   H004's `CCT`/`CCS`/etc. orders. See
   [Business order upload (BTU)](#business-order-upload-btu) below.
+- **Bank letter generation** (`examples/bankLetter.js`, `lib/BankLetter.js`)
+  - `templates/ini_h005_{de,en,fr}.hbs` print each key's certificate
+    subject/serial/validity and its SHA-256 **certificate digest**, the
+    value an H005 bank actually compares against `BankPubKeyDigests` - not
+    H004's raw modulus/exponent hash. See
+    [Bank letter (INI/HIA)](#bank-letter-inihia) below.
 
 Key generation, signing, and the bank-key digest computation are all
 H005-aware (see [Key differences from H004](#key-differences-from-h004)
@@ -294,15 +300,54 @@ technical/business codes from either phase. To see them, call
 Transfer phase (setting `order.transactionId` from the first response
 before the second call), the same way `upload()` does internally.
 
+## Bank letter (INI/HIA)
+
+H005 keys are wrapped in a self-signed X.509 certificate (see [Key
+differences from H004](#key-differences-from-h004) below), and the value a
+bank actually checks a subscriber's letter against is the SHA-256 digest of
+that certificate's raw DER bytes - the same `Crypto.digestCertificate()`
+used for `BankPubKeyDigests` in the BTD/BTU flow above, not H004's hash of
+the bare RSA modulus/exponent. `templates/ini_h005_{de,en,fr}.hbs` print
+that digest, plus the certificate's subject (CN), serial number and
+validity, for each of A006/X002/E002; `examples/bankLetter.js` picks these
+over the H004 templates automatically, by checking whether the generated
+keys carry a certificate (`key.hasCertificate()`) rather than requiring the
+caller to say which EBICS version they're on:
+
+```js
+const { Orders } = require('@sequel-de/ebics-client');
+const BankLetter = require('@sequel-de/ebics-client/lib/BankLetter');
+const fs = require('fs');
+
+const keys = await client.keys();
+const templateName = keys.a().hasCertificate() ? 'ini_h005_en' : 'ini_en';
+const template = fs.readFileSync(`templates/${templateName}.hbs`, 'utf8');
+
+const letter = new BankLetter({ client, bankName: 'Your Bank AG', template });
+await letter.serialize('bankLetter.html');
+```
+
+This isn't live-validated against a real bank (there's no way to - a bank
+letter is checked by a human comparing the printed digest against what
+their system shows, not something a test environment can confirm back to
+you programmatically the way an EBICS response can) - what's tested is that
+the printed digest matches `Crypto.digestCertificate()` exactly (see
+`test/unit/BankLetterTest.js`), which is the same function already
+live-validated as correct via `BankPubKeyDigests` in the INI/HIA/HPB flow
+above. Many EBICS 3.0 banks (PostFinance included) activate subscribers
+through an online banking portal instead of a paper letter at all, so check
+with your bank which flow it wants before relying on this.
+
 ## What's not supported (yet)
 
-**Bank letter generation** (`examples/bankLetter.js`, `lib/BankLetter.js`)
-has not been updated for H005: it prints the H004-style fingerprint (a hash
-of the raw RSA modulus/exponent), not H005's certificate digest (see
-below), so the printed hash won't match what an H005 bank expects if it
-asks for one. Many EBICS 3.0 banks (PostFinance included) activate
-subscribers through an online banking portal instead of a paper letter, so
-check with your bank which flow it wants before relying on this.
+**BTD's decrypt/unzip path for real bank statement bytes** is only proven
+against this library's own synthetic fixtures (see
+[Testing](#testing) below), not a real bank response - PostFinance's test
+subscriber has no seeded statement data, so there's no live bank response
+to decrypt in the first place. This isn't a code gap with an obvious fix:
+it's a test-data availability gap. If you get real statement data back
+from BTD against a live bank, it's worth confirming this path against it
+and reporting back either way.
 
 ## Usage
 
