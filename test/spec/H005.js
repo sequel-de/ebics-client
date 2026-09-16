@@ -361,7 +361,7 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.strictEqual(order.document, '<Document/>');
 	});
 
-	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container by default but SignatureFlag always present', async () => {
+	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName but a ZIP Container by default and SignatureFlag always present', async () => {
 		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
 		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
 		const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -372,7 +372,7 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.include(xml, '<Scope>CH</Scope>');
 		assert.include(xml, '<MsgName version="09">pain.001</MsgName>');
 		assert.notInclude(xml, 'fileName=');
-		assert.notInclude(xml, '<Container');
+		assert.include(xml, 'containerType="ZIP"');
 		// SignatureFlag's absence specifically means "no ES, authorise
 		// outside EBICS" per the H005 schema's own documentation (see
 		// lib/predefinedOrders/h005/CCT.js) - since upload.js always embeds
@@ -382,11 +382,39 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded (an H005-only requirement - see lib/orders/H005/serializers/upload.js)', async () => {
+	it('omits the Container element entirely when container: false is passed, for a market/message that uploads a plain, unwrapped document', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
+		const order = ebics.Orders.H005.CCT(document, { container: false });
+		const xml = await client.signOrder(order);
+
+		assert.isUndefined(order.orderDetails.BTUOrderParams.Service.Container);
+		assert.notInclude(xml, '<Container');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('computes DataDigest as the SHA-256 digest of the ZIP-wrapped document, base64-encoded, when container defaults to ZIP', async () => {
 		const document = '<Document>\n  <Foo/>\n</Document>';
 		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
 
+		const expectedDigest = crypto.createHash('sha256').update(utils.zip('document.xml', document)).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('computes DataDigest as the SHA-256 digest of the newline-stripped document, base64-encoded, when container: false is passed', async () => {
+		const document = '<Document>\n  <Foo/>\n</Document>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { container: false }));
+
 		const expectedDigest = crypto.createHash('sha256').update(document.replace(/\n|\r/g, '')).digest('base64').trim();
+
+		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
+	});
+
+	it('uses fileName as the ZIP entry name when both fileName and a ZIP container are set', async () => {
+		const document = '<Document/>';
+		const xml = await client.signOrder(ebics.Orders.H005.CCT(document, { fileName: 'payments.xml' }));
+
+		const expectedDigest = crypto.createHash('sha256').update(utils.zip('payments.xml', document)).digest('base64').trim();
 
 		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
 	});
@@ -422,10 +450,9 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.isTrue(await validateXML(xml));
 	});
 
-	it('carries the document through Initialisation and Transfer phases so the bank can decrypt back the original bytes', async () => {
-		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
-		const order = ebics.Orders.H005.CCT(document);
-
+	// Shared by both round-trip tests below: signs the order for both phases and
+	// returns the decrypted, inflated OrderData bytes the bank would end up with.
+	const roundTripOrderData = async (order) => {
 		// Initialisation phase: TransactionKey is the AES key, RSA-encrypted to the bank's E002 key.
 		const initXml = await client.signOrder(order);
 		const initDoc = new DOMParser().parseFromString(initXml, 'text/xml');
@@ -443,6 +470,23 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		const padded = Buffer.concat([decipher.update(Buffer.from(orderDataB64, 'base64')), decipher.final()]);
 		const unpadded = padded.slice(0, padded.length - padded[padded.length - 1]);
 
-		assert.strictEqual(zlib.inflateSync(unpadded).toString(), document.replace(/\n|\r/g, ''));
+		return zlib.inflateSync(unpadded);
+	};
+
+	it('carries the document through Initialisation and Transfer phases, ZIP-wrapped, so the bank can decrypt and unzip back the original bytes', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document));
+
+		const entries = utils.unzip(orderData);
+		assert.lengthOf(entries, 1);
+		assert.strictEqual(entries[0].name, 'document.xml');
+		assert.strictEqual(entries[0].data.toString(), document);
+	});
+
+	it('carries the document through Initialisation and Transfer phases as plain XML when container: false is passed', async () => {
+		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn>test</CstmrCdtTrfInitn></Document>';
+		const orderData = await roundTripOrderData(ebics.Orders.H005.CCT(document, { container: false }));
+
+		assert.strictEqual(orderData.toString(), document.replace(/\n|\r/g, ''));
 	});
 });
