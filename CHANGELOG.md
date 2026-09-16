@@ -1,8 +1,15 @@
 ### Changelog
 
+#### [v5.2.3](https://github.com/sequel-de/ebics-client/compare/v5.2.2...v5.2.3)
+
+- feat: H005-aware bank letter (certificate digest, not modulus/exponent) [`#4`](https://github.com/sequel-de/ebics-client/pull/4)
+
 #### [v5.2.2](https://github.com/sequel-de/ebics-client/compare/v5.2.1...v5.2.2)
 
+> 16 September 2026
+
 - docs: close out the BTU ZIP-archive investigation [`e3304a7`](https://github.com/sequel-de/ebics-client/commit/e3304a79a25bd0ed8ae93820fd4fea652d3a7438)
+- chore: release 5.2.2 [`8ba9858`](https://github.com/sequel-de/ebics-client/commit/8ba9858299b66aa2cec1ab8c9c8a23e77117a231)
 
 #### [v5.2.1](https://github.com/sequel-de/ebics-client/compare/v5.2.0...v5.2.1)
 

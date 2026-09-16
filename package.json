@@ -1,6 +1,6 @@
 {
 	"name": "@sequel-de/ebics-client",
-	"version": "5.2.2",
+	"version": "5.2.3",
 	"description": "Node.js ISO 20022 Compliant EBICS Client (EBICS 2.5/H004 and EBICS 3.0/H005)",
 	"main": "index.js",
 	"engines": {
