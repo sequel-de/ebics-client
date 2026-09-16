@@ -146,7 +146,22 @@ why the bump workflow publishes itself rather than relying on it.
 
 ## Supported Banks
 
-The client is currently tested and verified to work with the following banks.
+This library implements the standard EBICS protocol - both **EBICS 2.5
+(H004)** and **EBICS 3.0 (H005)** - not a bank-specific integration, so it
+should work with any EBICS-compliant bank, in any country that uses EBICS,
+not only the ones below. The list here is just the banks this project has
+actually tested and confirmed against so far, not a compatibility
+whitelist - if your bank isn't listed, that most likely means nobody's
+reported testing it yet, not that it won't work.
+
+Country-specific differences do exist (e.g. H005's BTF catalog -
+`ServiceName`/`Scope`/`MsgName` - varies by country; see [how BTF differs
+by country](docs/EBICS-3.0-H005.md#how-btf-differs-by-country)), and this
+library's H005 order builders expose every BTF field as an override for
+exactly that reason, rather than hard-coding Swiss values. If you've
+successfully tested against a bank not listed here (any country, either
+EBICS version), a PR adding it - or opening an issue with what you tested
+- is welcome.
 
 ### EBICS 2.5 (H004)
 
@@ -160,7 +175,13 @@ The client is currently tested and verified to work with the following banks.
 
 ### EBICS 3.0 (H005)
 
--   [PostFinance](https://www.postfinance.ch/) - live-validated against their ISO test environment; see [EBICS 3.0 (H005)](#ebics-30-h005) above and [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for exactly what was tested and how
+-   [PostFinance](https://www.postfinance.ch/) (Switzerland) - live-validated against their ISO test environment; see [EBICS 3.0 (H005)](#ebics-30-h005) above and [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for exactly what was tested and how
+
+EBICS 3.0 is mandated or in use well beyond Switzerland - notably Germany
+(DK) and France (CFONB), each with their own BTF catalog and, in France's
+case, legacy CFONB message formats layered into the same BTU/BTD framework
+(see the country comparison table linked above). None of those have been
+tested against a live bank yet - only PostFinance has.
 
 ## Inspiration
 
