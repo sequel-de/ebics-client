@@ -158,12 +158,12 @@ describe('H005 (EBICS 3.0) key management', () => {
 		assert.strictEqual(Crypto.digestCertificate(keysWithBank.bankX()), expectedDigest);
 	});
 
-	it('rejects the upload (BTU) operation, which is not yet implemented', async () => {
+	it('rejects an operation H005 does not support', async () => {
 		try {
-			await serializerMiddleware.use({ version: 'h005', operation: 'upload', orderDetails: {} }, client);
-			assert.fail('expected serializer.use() to throw for an unimplemented H005 operation');
+			await serializerMiddleware.use({ version: 'h005', operation: 'nonsense', orderDetails: {} }, client);
+			assert.fail('expected serializer.use() to throw for an unsupported H005 operation');
 		} catch (e) {
-			assert.match(e.message, /does not yet implement/);
+			assert.match(e.message, /does not support/);
 		}
 	});
 });
@@ -218,6 +218,24 @@ describe('H005 (EBICS 3.0) BTD business order download', () => {
 		assert.include(xml, '<Start>2024-01-01</Start>');
 		assert.include(xml, '<End>2024-01-31</End>');
 		assert.isTrue(await validateXML(xml));
+	});
+
+	it('computes BankPubKeyDigests as the certificate-DER digest (H005), not the modulus/exponent digest (H004)', async () => {
+		const xml = await client.signOrder(ebics.Orders.H005.Z53());
+		const keys = await client.keys();
+
+		const expectedAuth = Crypto.digestCertificate(keys.bankX());
+		const expectedEnc = Crypto.digestCertificate(keys.bankE());
+
+		assert.include(xml, `<Authentication Version="X002" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">${expectedAuth}</Authentication>`);
+		assert.include(xml, `<Encryption Version="E002" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">${expectedEnc}</Encryption>`);
+		// The two digest algorithms produce different output for the same
+		// cert-backed key (see lib/orders/H005/serializers/download.js) -
+		// assert against digestPublicKey too, so a regression back to the
+		// wrong algorithm still passes the loose `assert.include` checks
+		// above (both are valid-looking base64 strings) but fails here.
+		assert.notInclude(xml, Crypto.digestPublicKey(keys.bankX()));
+		assert.notInclude(xml, Crypto.digestPublicKey(keys.bankE()));
 	});
 
 	it('omits DateRange when no start/end is given, and still validates', async () => {
