@@ -361,7 +361,7 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.strictEqual(order.document, '<Document/>');
 	});
 
-	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container/SignatureFlag by default', async () => {
+	it('serializes a BTU (pain.001 credit transfer) upload request as ebicsRequest, schema-valid, with no fileName/Container by default but SignatureFlag always present', async () => {
 		const document = '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"><CstmrCdtTrfInitn/></Document>';
 		const xml = await client.signOrder(ebics.Orders.H005.CCT(document));
 		const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -373,7 +373,12 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.include(xml, '<MsgName version="09">pain.001</MsgName>');
 		assert.notInclude(xml, 'fileName=');
 		assert.notInclude(xml, '<Container');
-		assert.notInclude(xml, '<SignatureFlag');
+		// SignatureFlag's absence specifically means "no ES, authorise
+		// outside EBICS" per the H005 schema's own documentation (see
+		// lib/predefinedOrders/h005/CCT.js) - since upload.js always embeds
+		// a real ES, the flag must always be present, just empty by default
+		// (no requestEDS attribute) rather than omitted.
+		assert.include(xml, '<SignatureFlag/>');
 		assert.isTrue(await validateXML(xml));
 	});
 
@@ -386,12 +391,21 @@ describe('H005 (EBICS 3.0) BTU business order upload', () => {
 		assert.include(xml, `<DataDigest SignatureVersion="A006">${expectedDigest}</DataDigest>`);
 	});
 
-	it('includes fileName as an attribute and SignatureFlag/requestEDS only when explicitly set', async () => {
+	it('includes fileName as an attribute, and adds requestEDS="true" to SignatureFlag only when explicitly requested', async () => {
 		const order = ebics.Orders.H005.CCT('<Document/>', { fileName: 'payments.xml', requestEDS: true });
 		const xml = await client.signOrder(order);
 
 		assert.include(xml, 'fileName="payments.xml"');
 		assert.include(xml, '<SignatureFlag requestEDS="true"');
+		assert.isTrue(await validateXML(xml));
+	});
+
+	it('treats requestEDS: false the same as the default (SignatureFlag present but empty) - "true" is the only value the schema allows for the attribute', async () => {
+		const order = ebics.Orders.H005.CCT('<Document/>', { requestEDS: false });
+		const xml = await client.signOrder(order);
+
+		assert.include(xml, '<SignatureFlag/>');
+		assert.notInclude(xml, 'requestEDS');
 		assert.isTrue(await validateXML(xml));
 	});
 

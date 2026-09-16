@@ -140,9 +140,10 @@ way Germany's does.
 
 BTU is the write side of the BTF model described above - the same
 `Service`/BTF parameterization as BTD, plus an optional `fileName`
-attribute and an optional `SignatureFlag` (EBICS distributed-signature
-queuing). `Orders.H005.CCT` builds a BTU request for a pain.001 credit
-transfer using Swiss market-practice values:
+attribute and a `SignatureFlag` element (EBICS distributed-signature
+queuing - see the caveat below on why it's always present, not optional).
+`Orders.H005.CCT` builds a BTU request for a pain.001 credit transfer
+using Swiss market-practice values:
 
 | Parameter | Value |
 |---|---|
@@ -181,6 +182,22 @@ is H005's `DataTransferRequestType`, which requires a `DataDigest` element
 reuses it both for `DataDigest` and for the RSA-PSS-signed
 `SignatureValue`.
 
+**`SignatureFlag` is always present, not just an optional extra.** Per the
+H005 schema's own documentation (`BTFParamsTyp`/`SignatureFlagType` in
+`test/xsd/ebics_orders_H005.xsd`), a *missing* `SignatureFlag` specifically
+declares that the order carries no Electronic Signature at all and is
+authorised outside EBICS - but this library's upload path always embeds a
+real A006 `SignatureData` signature, so omitting the flag would misdeclare
+a signed order as unsigned (a bank could reject the payment, or accept it
+without validating the embedded signature). An earlier version of
+`Orders.H005.CCT` omitted `SignatureFlag` by default, caught by [Cursor
+Bugbot](https://cursor.com/bugbot) on the PR; it's fixed as of this
+version. `requestEDS: true` now adds `requestEDS="true"` to request
+spooling into the EBICS distributed signature (EDS) queue instead; any
+other value (including the `false` default) leaves `SignatureFlag` present
+but empty, since `"true"` is the only value the schema allows for that
+attribute.
+
 **Live-validated against PostFinance's EBICS 3.0 ISO test environment**: a
 BTU request built with `Orders.H005.CCT` - a minimal pain.001.001.09 credit
 transfer (`EUR 0.01`, ISO 20022's standard example creditor IBAN/BIC pair)
@@ -190,6 +207,14 @@ phase, with a real `OrderID` assigned. Unlike BTD (technically accepted but
 business-rejected for lack of seeded test data), PostFinance fully accepted
 this payment end-to-end - the strongest validation result of any H005
 order type covered so far.
+
+Caveat: that run predates the `SignatureFlag` fix described above, so it
+actually submitted a request that *omitted* `SignatureFlag` while still
+embedding a real ES - meaning PostFinance's test environment accepted it
+either way, but the run doesn't confirm the corrected (spec-correct)
+shape specifically. Worth re-running once you're testing against your own
+bank, since a stricter bank could plausibly behave differently for the
+two shapes even where PostFinance didn't.
 
 Note when reproducing this: `client.upload()` (and therefore
 `client.send()` for a BTU order) only returns `[transactionId, orderId]`,
