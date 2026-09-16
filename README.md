@@ -75,14 +75,16 @@ statement download (`Orders.H005.Z53`, camt.053) and BTU payment upload
 BTD/BTU's BTF parameters (`ServiceName`/`Scope`/`MsgName`/`Container`, plus
 `fileName`/`requestEDS` for BTU) default to published Swiss market
 practice but are fully overridable for other banks/markets/message types.
-INI/HIA/HPB/BTD have been live-tested against PostFinance's ISO test
-environment - BTD returned `EBICS_OK`, though the actual data round-trip
-is still unverified since that test subscriber has no statement data
-seeded (see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for the
-caveat); **BTU has not yet been validated against a live bank** - see the
-same doc. Full details, a code example (including overriding the BTF
-defaults, and how they differ by country), and the H004/H005 structural
-differences: see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
+INI/HIA/HPB/BTD/BTU have all been live-tested against PostFinance's ISO
+test environment - BTD returned `EBICS_OK`, though the actual data
+round-trip is still unverified since that test subscriber has no statement
+data seeded (see [`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md) for the
+caveat); **BTU returned a full `EBICS_OK` at both the technical and
+business level**, PostFinance's test environment fully accepting a real
+test payment end-to-end. Full details, a code example (including
+overriding the BTF defaults, and how they differ by country), and the
+H004/H005 structural differences: see
+[`docs/EBICS-3.0-H005.md`](docs/EBICS-3.0-H005.md).
 
 ## Testing
 
@@ -141,7 +143,7 @@ The client is currently tested and verified to work with the following banks:
 -   [Bank GPB International S.A.](https://gazprombank.lu/e-banking)
 -   [Bank GPB AO](https://gazprombank.ru/)
 -   [J.P. Morgan](https://www.jpmorgan.com/)
--   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB) and BTD statement download, validated against their ISO test environment
+-   [PostFinance](https://www.postfinance.ch/) - EBICS 3.0 (H005) key management (INI/HIA/HPB), BTD statement download and BTU payment upload, validated against their ISO test environment
 
 ## Inspiration
 

@@ -27,15 +27,16 @@ Key generation, signing, and the bank-key digest computation are all
 H005-aware (see [Key differences from H004](#key-differences-from-h004)
 below).
 
-INI/HIA/HPB/BTD have been validated both against the real EBICS 3.0 schema
-(see [Testing](#testing)) and live against
+INI/HIA/HPB/BTD/BTU have all been validated both against the real EBICS 3.0
+schema (see [Testing](#testing)) and live against
 [PostFinance](https://www.postfinance.ch)'s EBICS 3.0 ISO test environment.
 INI/HIA/HPB all returned `EBICS_OK`, including parsing the bank's real
 certificate-bearing HPB response. **BTD returned `EBICS_OK` at the
 technical level too, but its data round-trip is still unverified** - see
-the caveat below. **BTU is schema-validated and unit-tested (including a
-full encrypt/decrypt round trip) but not yet validated against a live
-bank** - see [Business order upload (BTU)](#business-order-upload-btu).
+the caveat below. **BTU returned full `EBICS_OK` at both the technical and
+business level** - PostFinance's test environment fully accepted a real
+(if trivial) test payment - see
+[Business order upload (BTU)](#business-order-upload-btu).
 
 > While building BTU, `BankPubKeyDigests` (used by both BTD and BTU) was
 > found to be computed with H004's modulus/exponent digest instead of
@@ -180,14 +181,23 @@ is H005's `DataTransferRequestType`, which requires a `DataDigest` element
 reuses it both for `DataDigest` and for the RSA-PSS-signed
 `SignatureValue`.
 
-**Not yet validated against a live bank.** Unlike INI/HIA/HPB/BTD, BTU has
-only been schema-validated (`test/spec/H005.js`, including a full
-Initialisation+Transfer round trip that decrypts the serialized request
-back to the original document) - it hasn't been exercised against a real
-EBICS test environment. A payment upload submits a real instruction even
-in a bank's test system, so validating this needs deliberate care beyond
-what this library does on its own; treat it as unproven until you've run
-it against your own bank's test environment.
+**Live-validated against PostFinance's EBICS 3.0 ISO test environment**: a
+BTU request built with `Orders.H005.CCT` - a minimal pain.001.001.09 credit
+transfer (`EUR 0.01`, ISO 20022's standard example creditor IBAN/BIC pair)
+- returned `technicalCode: 000000`/`EBICS_OK` **and**
+`businessCode: 000000`/`EBICS_OK` on both the Initialisation and Transfer
+phase, with a real `OrderID` assigned. Unlike BTD (technically accepted but
+business-rejected for lack of seeded test data), PostFinance fully accepted
+this payment end-to-end - the strongest validation result of any H005
+order type covered so far.
+
+Note when reproducing this: `client.upload()` (and therefore
+`client.send()` for a BTU order) only returns `[transactionId, orderId]`,
+unlike `download()`'s richer return value - it doesn't surface the
+technical/business codes from either phase. To see them, call
+`client.ebicsRequest(order)` directly for both the Initialisation and
+Transfer phase (setting `order.transactionId` from the first response
+before the second call), the same way `upload()` does internally.
 
 ## What's not supported (yet)
 
@@ -268,14 +278,15 @@ original bytes.
 
 Schema validity doesn't prove a real bank will accept a request (that's
 what the live PostFinance validation above covers for INI/HIA/HPB, and now
-BTD's request shape too) - but it does catch the entire class of bug this
-implementation actually hit during development (an invalid `OrderDetails`
-shape that no bank should ever accept, and the missing `DataDigest`
-element BTU's schema validation caught during development). BTD's
-`Service`/BTF values are sourced from published market practice and have
-been live-validated against PostFinance at the technical (`EBICS_OK`)
+BTD's and BTU's request shapes too) - but it does catch the entire class of
+bug this implementation actually hit during development (an invalid
+`OrderDetails` shape that no bank should ever accept, and the missing
+`DataDigest` element BTU's schema validation caught during development).
+BTD's `Service`/BTF values are sourced from published market practice and
+have been live-validated against PostFinance at the technical (`EBICS_OK`)
 level, but the decrypt/unzip path for actual returned statement data has
 only been exercised against this library's own synthetic fixture - see
 the caveat in [Business order download (BTD)](#business-order-download-btd)
-above. BTU has not been live-validated at all yet - see
+above. BTU has been live-validated end-to-end, with a full `EBICS_OK` at
+both the technical and business level - see
 [Business order upload (BTU)](#business-order-upload-btu).
